@@ -9,15 +9,15 @@
 
 typedef struct pool_s pool_s;
 
-struct pool_s 
-{
+struct pool_s {
   uint32_t gen;       /*generation number*/
   uint16_t chromsize; /*size in bits*/
-  uint64_t cmask      /*bit mask for each chromosome*/
+  uint64_t cmask;     /*bit mask for each chromosome*/
   pool_s *parent;
   pool_s *child;
   uint64_t *popul;
 };
 
+extern pool_s *pool_s_ (uint16_t csize);
 
 #endif
