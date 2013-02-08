@@ -8,6 +8,7 @@
                                   (pool->chromsize % 8 != 0))
 
 typedef struct pool_s pool_s;
+typedef struct gnode_s gnode_s;
 
 struct pool_s {
   uint32_t gen;       /*generation number*/
@@ -23,19 +24,6 @@ extern pool_s *pool_s_ (uint16_t csize);
 extern unsigned char *read_gfile(const char *fname);
 
 /*Graph Parsing Routines*/
-
-/*  Graph Grammar:
- *  <graph> => <nodelist> <edgelist> EOF
- *  <nodelist> => N={n <nodeparam>}
- *  <nodeparam> => ,n <nodeparam> | E
- *  <edgelist> => E={<e> <edgeparam> }
- *  <edgeparam> => ,<e> <edgeparam> | E 
- *  <e> => {n,n,real}
- *
- *  Regex for node/edge definitions:
- *  <N> : (a...Z)+(a...z+0...9)*
- *  <e> : (0...9)+<optional_fract>
- *  <optional_frack> : (0...9)?
- */
+extern gnode_s *gparse (unsigned char *buf);
 
 #endif
