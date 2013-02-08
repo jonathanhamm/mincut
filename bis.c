@@ -9,14 +9,15 @@
 
 /*TTYPES*/
 #define _ID         1
-#define _OPENBRACE  2
-#define _CLOSEBRACE 3
-#define _COMMA      4
-#define _EQU        5
-#define _EOF        6
+#define _NUM        2
+#define _OPENBRACE  3
+#define _CLOSEBRACE 4
+#define _COMMA      5
+#define _EQU        6
+#define _EOF        7
 
-#define __GTNEXT(str) (str = str->next)
-#define __GTPREV(str) (str = str->prev)
+#define __GTNEXT() (stream_ = stream_->next)
+#define __GTPREV() (stream_ = stream_->prev)
 
 typedef struct gtoken_s gtoken_s;
 
@@ -85,8 +86,6 @@ err_:
 
 
 /*  Graph Parsing Routines */
-
-
 gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
 {
     gtoken_s *tok;
@@ -110,6 +109,7 @@ gnode_s *gparse (unsigned char *buf)
     
     if (!lex_ (buf))
         return NULL;
+    parse_();
 }
 
 /* 
@@ -157,7 +157,6 @@ gtoken_s *lex_ (unsigned char *buf)
                     *buf = '\0';
                     curr = gtoken_s_ (curr, bckptr, _ID);
                     *buf = backup;
-                    bckptr = buf;
                 } else if (*buf >= '0' && *buf <= '9') {
                     for (bckptr = buf, buf++; (*buf >= '0' && *buf <= '9'); buf++) {
                         if (buf - bckptr == _MAXLEXLEN) {
@@ -175,9 +174,8 @@ gtoken_s *lex_ (unsigned char *buf)
                     }
                     backup = *buf;
                     *buf = '\0';
-                    curr = gtoken_s_ (curr, bckptr, _ID);
+                    curr = gtoken_s_ (curr, bckptr, _NUM);
                     *buf = backup;
-                    bckptr = buf;
                 } else {
                     printf("Symbol Error\n");
                     goto err_;
@@ -185,21 +183,85 @@ gtoken_s *lex_ (unsigned char *buf)
                 break;
         }
     }
-    curr = gtoken_s_ (curr, "\xFF", _EOF);
+    curr = gtoken_s_ (curr, "\xff", _EOF);
     return stream_;
 err_:
     return NULL;
 }
 
+void pgraph_ (void);
+void pnodelist_ (void);
+void pnodeparam_ (void);
+void pedgelist_ (void);
+void pedgeparam_ (void);
+void e_ (void);
+
 /*  Graph Grammar:
  *  <graph> => <nodelist> <edgelist> EOF
- *  <nodelist> => N={n <nodeparam>}
- *  <nodeparam> => ,n <nodeparam> | E
+ *  <nodelist> => V={v <nodeparam>}
+ *  <nodeparam> => ,v <nodeparam> | E
  *  <edgelist> => E={<e> <edgeparam> }
  *  <edgeparam> => ,<e> <edgeparam> | E
  *  <e> => {n,n,real}
  */
 static int parse_ (void)
 {
-    __GTNEXT(str)
+    pgraph_();
+}
+
+void pgraph_ (void)
+{
+    pnodelist_();
+    pedgelist_();
+    if (__GTNEXT()->type == _EOF)
+        printf("Parse Success!\n");
+}
+
+void pnodelist_ (void)
+{
+    if (!strcmp(stream_->lexeme, "V"))
+    if (__GTNEXT()->type == _EQU)
+    if (__GTNEXT()->type == _OPENBRACE)
+    if (__GTNEXT()->type == _ID)
+        pnodeparam_();
+    if (stream_->type == _CLOSEBRACE)
+        return;
+}
+
+void pnodeparam_ (void)
+{
+    if (__GTNEXT()->type == _COMMA)
+    if (__GTNEXT()->type == _ID)
+        pnodeparam_();
+}
+
+void pedgelist_ (void)
+{
+    if (!strcmp(__GTNEXT()->lexeme, "E"))
+    if (__GTNEXT()->type == _EQU)
+    if (__GTNEXT()->type == _OPENBRACE)
+        e_();
+    pedgeparam_();
+    if (stream_->type == _CLOSEBRACE)
+        return;
+}
+
+void pedgeparam_ (void)
+{
+    if (__GTNEXT()->type == _COMMA) {
+        e_();
+        pedgeparam_();
+    }
+}
+
+void e_ (void)
+{
+    if (__GTNEXT()->type == _OPENBRACE)
+    if (__GTNEXT()->type == _ID)
+    if (__GTNEXT()->type == _COMMA)
+    if (__GTNEXT()->type == _ID)
+    if (__GTNEXT()->type == _COMMA)
+    if (__GTNEXT()->type == _NUM)
+    if (__GTNEXT()->type == _CLOSEBRACE)
+        return;
 }
