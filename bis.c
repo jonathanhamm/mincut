@@ -1,3 +1,8 @@
+/*
+ * Main GA Engine
+ * Author: Jonathan Hamm
+ */
+
 #include "bis.h"
 #include <stdlib.h>
 #include <stdio.h>
