@@ -12,5 +12,7 @@ int main (int argc, char **argv)
   tmp = read_gfile (argv[1]);
   if (!tmp)
     return 2;
+  gparse (tmp);
+  
   return 0;
 }
