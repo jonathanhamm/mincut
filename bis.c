@@ -8,9 +8,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#define _VTABLE_SIZE 19
+#define _CHUNK_SIZE 8
 #define _UEOF (unsigned char)EOF
 #define _INITBUFSIZE 256
-#define _MAXLEXLEN 16
+#define _MAXLEXLEN 15
 
 /*TTYPES*/
 #define _ID         1
@@ -25,6 +27,11 @@
 #define __GTPREV() (stream_ = stream_->prev)
 
 typedef struct gtoken_s gtoken_s;
+typedef struct wgraph_s wgraph_s;
+typedef struct vrecord_s vrecord_s;
+typedef struct vertex_s vertex_s;
+typedef struct vchain_s vchain_s;
+typedef struct edge_s edge_s;
 
 struct gtoken_s
 {
@@ -34,11 +41,63 @@ struct gtoken_s
     gtoken_s *next; 
 };
 
+struct vrecord_s
+{
+    vertex_s *v;
+    union {
+        unsigned long isoccupied;
+        vchain_s *chain;
+    };
+};
+
+struct vchain_s
+{
+    uint8_t mem;
+    vrecord_s chunk[_CHUNK_SIZE];
+    vchain_s *next;
+};
+
+struct vertex_s
+{
+    unsigned char name[_MAXLEXLEN + 1];
+    short nedges;
+    edge_s *edges;
+};
+
+struct edge_s
+{
+    double weight;
+    vertex_s *v1;
+    vertex_s *v2;
+};
+
+struct wgraph_s
+{
+    short nvert;
+    vrecord_s vtable[_VTABLE_SIZE];
+};
+
+
 static gtoken_s *stream_;
 
+/*tokenizing routines for graph data*/
 static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type);
 static gtoken_s *lex_ (unsigned char *buf);
+
+/*graph parsing routines*/
 static int parse_ (void);
+static void pgraph_ (void);
+static void pnodelist_ (void);
+static void pnodeparam_ (void);
+static void pedgelist_ (void);
+static void pedgeparam_ (void);
+static void e_ (void);
+
+/*graph data structure routines*/
+static inline wgraph_s *wgraph_s_ (void);
+static int insert_vertex (wgraph_s *graph, vertex_s *v);
+static vchain_s *vchain_s_ (void);
+static int chain_insert (vchain_s *chunk, vertex_s *v);
 
 pool_s *pool_s_ (uint16_t csize) 
 {
@@ -154,7 +213,7 @@ gtoken_s *lex_ (unsigned char *buf)
                     for (bckptr = buf, ++buf; (*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')
                          || (*buf >= '0' && *buf <= '9'); buf++) {
                         if (buf - bckptr == _MAXLEXLEN) {
-                            printf("Too Long Lexeme: %16s", bckptr);
+                            printf("Too Long ID: %15s", bckptr);
                             goto err_;
                         }
                     }
@@ -165,14 +224,14 @@ gtoken_s *lex_ (unsigned char *buf)
                 } else if (*buf >= '0' && *buf <= '9') {
                     for (bckptr = buf, buf++; (*buf >= '0' && *buf <= '9'); buf++) {
                         if (buf - bckptr == _MAXLEXLEN) {
-                            printf("Too Long Lexeme: %16s", bckptr);
+                            printf("Too Long ID: %15s", bckptr);
                             goto err_;
                         }
                     }
                     if (*buf == '.') {
                         for (buf++; (*buf >='0' && *buf <= '9'); buf++) {
                             if (buf - bckptr == _MAXLEXLEN) {
-                                printf("Too Long Lexeme: %16s", bckptr);
+                                printf("Too Long ID: %15s", bckptr);
                                 goto err_;
                             }
                         }
@@ -193,13 +252,6 @@ gtoken_s *lex_ (unsigned char *buf)
 err_:
     return NULL;
 }
-
-void pgraph_ (void);
-void pnodelist_ (void);
-void pnodeparam_ (void);
-void pedgelist_ (void);
-void pedgeparam_ (void);
-void e_ (void);
 
 /*  Graph Grammar:
  *  <graph> => <nodelist> <edgelist> EOF
@@ -269,4 +321,48 @@ void e_ (void)
     if (__GTNEXT()->type == _NUM)
     if (__GTNEXT()->type == _CLOSEBRACE)
         return;
+}
+
+/*graph data structure routines*/
+
+inline wgraph_s *wgraph_s_ (void)
+{
+    return calloc(1,sizeof(wgraph_s));
+}
+
+int insert_vertex (wgraph_s *graph, vertex_s *v)
+{
+    uint8_t index;
+    vrecord_s *rec;
+    
+    rec = &graph->vtable[*(uint64_t *)v->name % _VTABLE_SIZE];
+    if (!rec->isoccupied) {
+        rec->v = v;
+        rec->isoccupied = 1;
+    } else if (rec->isoccupied == 1) {
+        rec->chain = calloc(1,sizeof(*rec->chain));
+      //  static int chain_insert (vchain_s *chunk, vertex_s *v);
+
+    }
+}
+
+static vchain_s *vchain_s_ (void)
+{
+    vchain_s *c;
+    
+    c = calloc(1,sizeof(*c));
+    if (!c)
+        return NULL;
+    c->mem = ~c->mem;
+    return c;
+}
+
+int chain_insert (vchain_s *chunk, vertex_s *v)
+{
+    uint8_t i;
+    uint8_t it;
+    
+    for (i = 0, it = chunk->mem; it; i++) {
+        
+    }
 }
