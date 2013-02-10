@@ -341,6 +341,7 @@ int insert_vertex (wgraph_s *graph, vertex_s *v)
         rec->isoccupied = 1;
     } else if (rec->isoccupied == 1) {
         rec->chain = calloc(1,sizeof(*rec->chain));
+        
       //  static int chain_insert (vchain_s *chunk, vertex_s *v);
 
     }
@@ -361,8 +362,26 @@ int chain_insert (vchain_s *chunk, vertex_s *v)
 {
     uint8_t i;
     uint8_t it;
+    vchain_s *iter;
     
-    for (i = 0, it = chunk->mem; it; i++) {
-        
+    if (!chunk) {
+        chunk = vchain_s_();
+        if (!chunk)
+            return 0;
     }
+    for (iter = chunk; iter->next; iter = iter->next);
+    i = ffs(iter->mem);
+    if (i) {
+        iter->mem &= ~(1 << i);
+        i--;
+    }
+    else {
+        iter->next = vchain_s_();
+        iter = iter->next;
+        if (!iter)
+            return 0;
+        iter->mem = 0xef;
+    }
+    iter->chunk[i].v = v;
+    return 1;
 }
