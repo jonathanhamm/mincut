@@ -23,6 +23,12 @@
 #define _EQU        6
 #define _EOF        7
 
+#define __IDCPY(DST,SRC)    *(uint64_t *)DST = *(uint64_t *)SRC; \
+                            *(((uint64_t *)DST) + 1) = *(((uint64_t *)&SRC[0]) + 1)
+
+#define __IDCMP(ID1,ID2)    (*(uint64_t *)ID1 == *(uint64_t *)ID2 && \
+                            *(((uint64_t *)ID1) + 1) == *(((uint64_t *)ID2) + 1))
+
 #define __GTNEXT() (stream_ = stream_->next)
 #define __GTPREV() (stream_ = stream_->prev)
 
@@ -61,7 +67,7 @@ struct vertex_s
 {
     unsigned char name[_MAXLEXLEN + 1];
     short nedges;
-    edge_s *edges;
+    edge_s **edges;
 };
 
 struct edge_s
@@ -85,17 +91,21 @@ static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned shor
 static gtoken_s *lex_ (unsigned char *buf);
 
 /*graph parsing routines*/
-static int parse_ (void);
-static void pgraph_ (void);
-static void pnodelist_ (void);
-static void pnodeparam_ (void);
-static void pedgelist_ (void);
-static void pedgeparam_ (void);
-static void e_ (void);
+static wgraph_s *parse_ (void);
+static void pgraph_ (wgraph_s *g);
+static void pnodelist_ (wgraph_s *g);
+static void pnodeparam_ (wgraph_s *g);
+static void pedgelist_ (wgraph_s *g);
+static void pedgeparam_ (wgraph_s *g);
+static void e_ (wgraph_s *g);
 
 /*graph data structure routines*/
 static inline wgraph_s *wgraph_s_ (void);
+static vertex_s *vertex_s_ (gtoken_s *tok);
+static int addedge (vertex_s *v, edge_s *e);
+static edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
 static int insert_vertex (wgraph_s *graph, vertex_s *v);
+static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
 static vchain_s *vchain_s_ (void);
 static int chain_insert (vchain_s *chunk, vertex_s *v);
 
@@ -261,66 +271,92 @@ err_:
  *  <edgeparam> => ,<e> <edgeparam> | E
  *  <e> => {n,n,real}
  */
-static int parse_ (void)
+static wgraph_s *parse_ (void)
 {
-    pgraph_();
+    wgraph_s *g;
+    
+    g = wgraph_s_();
+    if (!g)
+        return NULL;
+    pgraph_(g);
+    return g;
 }
 
-void pgraph_ (void)
+void pgraph_ (wgraph_s *g)
 {
-    pnodelist_();
-    pedgelist_();
+    pnodelist_(g);
+    pedgelist_(g);
     if (__GTNEXT()->type == _EOF)
         printf("Parse Success!\n");
 }
 
-void pnodelist_ (void)
+void pnodelist_ (wgraph_s *g)
 {
     if (!strcmp(stream_->lexeme, "V"))
     if (__GTNEXT()->type == _EQU)
     if (__GTNEXT()->type == _OPENBRACE)
-    if (__GTNEXT()->type == _ID)
-        pnodeparam_();
+    if (__GTNEXT()->type == _ID) {
+        insert_vertex (g, vertex_s_(stream_));
+        pnodeparam_(g);
+    }
     if (stream_->type == _CLOSEBRACE)
         return;
 }
 
-void pnodeparam_ (void)
+void pnodeparam_ (wgraph_s *g)
 {
     if (__GTNEXT()->type == _COMMA)
-    if (__GTNEXT()->type == _ID)
-        pnodeparam_();
+    if (__GTNEXT()->type == _ID) {
+        insert_vertex (g, vertex_s_(stream_));
+        pnodeparam_(g);
+    }
 }
 
-void pedgelist_ (void)
+void pedgelist_ (wgraph_s *g)
 {
     if (!strcmp(__GTNEXT()->lexeme, "E"))
     if (__GTNEXT()->type == _EQU)
     if (__GTNEXT()->type == _OPENBRACE)
-        e_();
-    pedgeparam_();
+        e_(g);
+    pedgeparam_(g);
     if (stream_->type == _CLOSEBRACE)
         return;
 }
 
-void pedgeparam_ (void)
+void pedgeparam_ (wgraph_s *g)
 {
     if (__GTNEXT()->type == _COMMA) {
-        e_();
-        pedgeparam_();
+        e_(g);
+        pedgeparam_(g);
     }
 }
 
-void e_ (void)
+void e_ (wgraph_s *g)
 {
+    double      weight;
+    vertex_s    *v1,
+                *v2;
+    
     if (__GTNEXT()->type == _OPENBRACE)
-    if (__GTNEXT()->type == _ID)
-    if (__GTNEXT()->type == _COMMA)
-    if (__GTNEXT()->type == _ID)
-    if (__GTNEXT()->type == _COMMA)
-    if (__GTNEXT()->type == _NUM)
-    if (__GTNEXT()->type == _CLOSEBRACE)
-        return;
+    if (__GTNEXT()->type == _ID) {
+        v1 = v_lookup (g, stream_->lexeme);
+        if (!v1)
+            return;
+        if (__GTNEXT()->type == _COMMA)
+        if (__GTNEXT()->type == _ID) {
+            v2 = v_lookup (g, stream_->lexeme);
+            if (!v2)
+                return;
+            if (__GTNEXT()->type == _COMMA)
+            if (__GTNEXT()->type == _NUM) {
+                weight = atof(stream_->lexeme);
+                if (__GTNEXT()->type == _CLOSEBRACE) {
+                    edge_s_ (v1, v2, weight);
+                    return;
+                }
+            }
+        }
+    }
 }
 
 /*graph data structure routines*/
@@ -328,6 +364,45 @@ void e_ (void)
 inline wgraph_s *wgraph_s_ (void)
 {
     return calloc(1,sizeof(wgraph_s));
+}
+
+vertex_s *vertex_s_ (gtoken_s *tok)
+{
+    vertex_s *v;
+    
+    v = calloc(1, sizeof(*v));
+    if (!v)
+        return NULL;
+    __IDCPY (v->name, tok->lexeme);
+    return v;
+}
+
+int addedge (vertex_s *v, edge_s *e)
+{
+    if (v->nedges)
+        v->edges = realloc(v->edges, (v->nedges + 1) * sizeof(*v->edges));
+    else
+        v->edges = malloc(sizeof(*v->edges));
+    if (!v->edges)
+        return 0;
+    v->edges[v->nedges] = e;
+    v->nedges++;
+    return 1;
+}
+
+edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
+{
+    edge_s *edge;
+    
+    edge = malloc(sizeof(*edge));
+    if (!edge)
+        return NULL;
+    if (!(addedge(v1,edge) && addedge(v2,edge)))
+        return NULL;
+    edge->v1 = v1;
+    edge->v2 = v2;
+    edge->weight = weight;
+    return edge;
 }
 
 int insert_vertex (wgraph_s *graph, vertex_s *v)
@@ -341,6 +416,30 @@ int insert_vertex (wgraph_s *graph, vertex_s *v)
         rec->isoccupied = 1;
     } else if (rec->isoccupied >= 1)
         return chain_insert (rec->chain, v);
+}
+
+vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
+{
+    uint8_t i;
+    uint8_t it;
+    vrecord_s *rec;
+    vchain_s *iterator;
+    
+    rec = &graph->vtable[*(uint64_t *)key % _VTABLE_SIZE];
+    if (!__IDCMP(key,rec->v->name)) {
+        if (rec->isoccupied && rec->isoccupied != 1) {
+            for (iterator = rec->chain; iterator; iterator = iterator->next) {
+                for (i = 0, it = iterator->mem; it; it &= ~(1 << i), i = ffs(it)-1) {
+                    if (__IDCMP(key,iterator->chunk[i].v->name))
+                        return iterator->chunk[i].v;
+                }
+            }
+            if (!iterator)
+                return NULL;
+        }
+        return NULL;
+    }
+    return rec->v;
 }
 
 static vchain_s *vchain_s_ (void)
@@ -370,8 +469,7 @@ int chain_insert (vchain_s *chunk, vertex_s *v)
     if (i) {
         iter->mem &= ~(1 << i);
         i--;
-    }
-    else {
+    } else {
         iter->next = vchain_s_();
         iter = iter->next;
         if (!iter)
