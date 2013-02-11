@@ -9,8 +9,10 @@
 
 typedef struct pool_s pool_s;
 typedef struct gnode_s gnode_s;
+typedef struct wgraph_s wgraph_s;
 
-struct pool_s {
+struct pool_s
+{
   uint32_t gen;       /*generation number*/
   uint16_t chromsize; /*size in bits*/
   uint64_t cmask;     /*bit mask for each chromosome*/
@@ -25,5 +27,7 @@ extern unsigned char *read_gfile(const char *fname);
 
 /*Graph Parsing Routines*/
 extern gnode_s *gparse (unsigned char *buf);
+
+extern void printgraph (wgraph_s *g);
 
 #endif

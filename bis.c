@@ -24,7 +24,7 @@
 #define _EOF        7
 
 #define __IDCPY(DST,SRC)    *(uint64_t *)DST = *(uint64_t *)SRC; \
-                            *(((uint64_t *)DST) + 1) = *(((uint64_t *)&SRC[0]) + 1)
+                            *(((uint64_t *)DST) + 1) = *(((uint64_t *)SRC) + 1)
 
 #define __IDCMP(ID1,ID2)    (*(uint64_t *)ID1 == *(uint64_t *)ID2 && \
                             *(((uint64_t *)ID1) + 1) == *(((uint64_t *)ID2) + 1))
@@ -33,7 +33,6 @@
 #define __GTPREV() (stream_ = stream_->prev)
 
 typedef struct gtoken_s gtoken_s;
-typedef struct wgraph_s wgraph_s;
 typedef struct vrecord_s vrecord_s;
 typedef struct vertex_s vertex_s;
 typedef struct vchain_s vchain_s;
@@ -107,7 +106,8 @@ static edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
 static int insert_vertex (wgraph_s *graph, vertex_s *v);
 static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
 static vchain_s *vchain_s_ (void);
-static int chain_insert (vchain_s *chunk, vertex_s *v);
+void printbyte (uint8_t b);
+static int chain_insert (vchain_s **chunk, vertex_s *v);
 
 pool_s *pool_s_ (uint16_t csize) 
 {
@@ -183,7 +183,7 @@ gnode_s *gparse (unsigned char *buf)
     
     if (!lex_ (buf))
         return NULL;
-    parse_();
+    printgraph (parse_());
 }
 
 /* 
@@ -258,6 +258,8 @@ gtoken_s *lex_ (unsigned char *buf)
         }
     }
     curr = gtoken_s_ (curr, "\xff", _EOF);
+    for (curr = stream_; curr; curr = curr->next)
+        printf("%s\n",curr->lexeme);
     return stream_;
 err_:
     return NULL;
@@ -394,6 +396,7 @@ edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
 {
     edge_s *edge;
     
+    printf("Adding edge: %s %s %f\n",v1->name,v2->name, weight);
     edge = malloc(sizeof(*edge));
     if (!edge)
         return NULL;
@@ -415,7 +418,7 @@ int insert_vertex (wgraph_s *graph, vertex_s *v)
         rec->v = v;
         rec->isoccupied = 1;
     } else if (rec->isoccupied >= 1)
-        return chain_insert (rec->chain, v);
+        return chain_insert (&rec->chain, v);
 }
 
 vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
@@ -429,7 +432,7 @@ vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
     if (!__IDCMP(key,rec->v->name)) {
         if (rec->isoccupied && rec->isoccupied != 1) {
             for (iterator = rec->chain; iterator; iterator = iterator->next) {
-                for (i = 0, it = iterator->mem; it; it &= ~(1 << i), i = ffs(it)-1) {
+                for (i = 0, it = ~iterator->mem; it; it &= ~(1 << i), i = ffs(it)-1) {
                     if (__IDCMP(key,iterator->chunk[i].v->name))
                         return iterator->chunk[i].v;
                 }
@@ -453,29 +456,74 @@ static vchain_s *vchain_s_ (void)
     return c;
 }
 
-int chain_insert (vchain_s *chunk, vertex_s *v)
+void printbyte (uint8_t b)
+{
+    uint8_t i;
+
+    for (i = 0; i < 8; i++)
+        printf("%d",((b << i) & 0x80)>>7);
+    printf("\n");
+}
+
+int chain_insert (vchain_s **chunk, vertex_s *v)
 {
     uint8_t i;
     uint8_t it;
     vchain_s *iter;
     
-    if (!chunk) {
-        chunk = vchain_s_();
-        if (!chunk)
+    if (*chunk == (vchain_s *)1) {
+        *chunk = vchain_s_();
+        if (!*chunk)
             return 0;
     }
-    for (iter = chunk; iter->next; iter = iter->next);
+    for (iter = *chunk; iter->next; iter = iter->next);
     i = ffs(iter->mem);
     if (i) {
-        iter->mem &= ~(1 << i);
         i--;
+        iter->mem &= ~(1 << i);
+        printbyte(iter->mem);
+
     } else {
         iter->next = vchain_s_();
         iter = iter->next;
         if (!iter)
             return 0;
-        iter->mem = 0x7f; /* 0b01111111 */
+        iter->mem = 0xfe; /* 0b11111110 */
     }
     iter->chunk[i].v = v;
     return 1;
+}
+
+void printgraph (wgraph_s *g)
+{
+    uint8_t i,
+            it;
+    uint16_t ei;
+    uint16_t index;
+    vchain_s *iter;
+
+    for (index = 0; index < _VTABLE_SIZE; index++) {
+        if (g->vtable[index].isoccupied) {
+            printf("%s  ->\n",g->vtable[index].v->name);
+            for (ei = 0; ei < g->vtable[index].v->nedges; ei++) {
+                printf("\t%s,%s,%f\n",  g->vtable[index].v->edges[ei]->v1->name,
+                                        g->vtable[index].v->edges[ei]->v2->name,
+                                        g->vtable[index].v->edges[ei]->weight);
+            }
+            printf("\n");
+            if (g->vtable[index].isoccupied != 1) {
+                for (iter = g->vtable[index].chain; iter; iter = iter->next) {
+                    for (i = 0, it = ~iter->mem; it; it &= ~(1 << i), i = ffs(it)-1) {
+                        printf("%s  ->\n",iter->chunk[i].v->name);
+                        for (ei = 0; ei < iter->chunk[i].v->nedges; ei++) {
+                            printf("\t%s,%s,%f\n",  iter->chunk[i].v->edges[ei]->v1->name,
+                                                    iter->chunk[i].v->edges[ei]->v2->name,
+                                                    iter->chunk[i].v->edges[ei]->weight);
+                        }
+                    }
+
+                }
+            }
+        }
+    }
 }

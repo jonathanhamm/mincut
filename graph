@@ -1,3 +1,2 @@
-V = {a, b,      c, d,e,f,g,h}
-E = {{a     ,  
-b,3.1   } , {d,  e,32.1}}
+V = {a, b,      c, d,e,f,g,h,aaa,dd,e1,rewrq11,x,j,k}
+E = {{a,b,3.1} , {d,  e,32.1}, {b,c,4.1}}
