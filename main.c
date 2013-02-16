@@ -13,6 +13,5 @@ int main (int argc, char **argv)
   if (!tmp)
     return 2;
   gparse (tmp);
-  
   return 0;
 }
