@@ -3,6 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*reads file into a buffer*/
+static unsigned char *read_gfile(const char *fname);
+
+/*tokenizing routines for graph data*/
+static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type);
+static gtoken_s *lex_ (unsigned char *buf);
+
 /*graph parsing routines*/
 static wgraph_s *parse_ (void);
 static void pgraph_ (wgraph_s *g);
@@ -12,12 +19,27 @@ static void pedgelist_ (wgraph_s *g);
 static void pedgeparam_ (wgraph_s *g);
 static void e_ (wgraph_s *g);
 
+/*graph data structure routines*/
+static inline wgraph_s *wgraph_s_ (void);
+static vertex_s *vertex_s_ (gtoken_s *tok);
+static int addedge (vertex_s *v, edge_s *e);
+static edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
+static int insert_vertex (wgraph_s *graph, vertex_s *v);
+static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
+static vchain_s *vchain_s_ (void);
+static void printbyte (uint8_t b);
+static int chain_insert (vchain_s **chunk, vertex_s *v);
+
 static gtoken_s *stream_;
 
-wgraph_s *gparse (unsigned char *buf)
+wgraph_s *gparse (const unsigned char *file)
 {
   wgraph_s *g;
+  unsigned char *buf;
   
+  buf = read_gfile (file);
+  if (!buf)
+    return NULL;
   if (!lex_ (buf))
     return NULL;
   g = parse_();
@@ -248,26 +270,26 @@ void e_ (wgraph_s *g)
   *v2;
   
   if (__GTNEXT()->type == _OPENBRACE)
+  if (__GTNEXT()->type == _ID) {
+    v1 = v_lookup (g, stream_->lexeme);
+    if (!v1)
+      return;
+    if (__GTNEXT()->type == _COMMA)
     if (__GTNEXT()->type == _ID) {
-      v1 = v_lookup (g, stream_->lexeme);
-      if (!v1)
+      v2 = v_lookup (g, stream_->lexeme);
+      if (!v2)
         return;
       if (__GTNEXT()->type == _COMMA)
-        if (__GTNEXT()->type == _ID) {
-          v2 = v_lookup (g, stream_->lexeme);
-          if (!v2)
-            return;
-          if (__GTNEXT()->type == _COMMA)
-            if (__GTNEXT()->type == _NUM) {
-              weight = atof(stream_->lexeme);
-              if (__GTNEXT()->type == _CLOSEBRACE) {
-                g->nedges++;
-                edge_s_ (v1, v2, weight);
-                return;
-              }
-            }
+      if (__GTNEXT()->type == _NUM) {
+        weight = atof(stream_->lexeme);
+        if (__GTNEXT()->type == _CLOSEBRACE) {
+          g->nedges++;
+          edge_s_ (v1, v2, weight);
+          return;
         }
+      }
     }
+  }
 }
 
 /*graph data structure routines*/

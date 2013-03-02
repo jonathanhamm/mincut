@@ -7,9 +7,12 @@
 #define _GET_CHRBYSIZE(pool) ((pool->chromsize >> 3) + \
                                   (pool->chromsize % 8 != 0))
 
+#define _CQWORDSIZE(csize) (((csize) >> 6) + ((csize) % 64 != 0)) 
+
 typedef struct pool_s pool_s;
-typedef struct gnode_s gnode_s;
-typedef struct wgraph_s wgraph_s;
+
+/*Chromosomes are Little Endian, and Packed into a 64-bit alligned buffer*/
+typedef struct chromosome_s chromosome_s;
 
 struct pool_s
 {
@@ -18,16 +21,13 @@ struct pool_s
   uint64_t cmask;     /*bit mask for each chromosome*/
   pool_s *parent;
   pool_s *child;
-  uint64_t *popul;
+  uint64_t popul[0];
 };
 
-extern pool_s *pool_s_ (uint16_t csize);
+pool_s *pool_init (wgraph_s *g);
 
-extern unsigned char *read_gfile(const char *fname);
-
-/*Graph Parsing Routines*/
-extern gnode_s *gparse (unsigned char *buf);
-
-extern void printgraph (wgraph_s *g);
+/*ge routines*/
+extern pool_s *pool_init (wgraph_s *g);
+extern void printpool (pool_s *p);
 
 #endif

@@ -83,25 +83,8 @@ struct edge_s
   vertex_s *v2;
 };
 
-extern unsigned char *read_gfile(const char *fname);
-
 /*graph data structure routines*/
-extern inline wgraph_s *wgraph_s_ (void);
-extern vertex_s *vertex_s_ (gtoken_s *tok);
-extern int addedge (vertex_s *v, edge_s *e);
-extern edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
-extern int insert_vertex (wgraph_s *graph, vertex_s *v);
-extern vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
-extern vchain_s *vchain_s_ (void);
-extern void printbyte (uint8_t b);
-extern int chain_insert (vchain_s **chunk, vertex_s *v);
+extern wgraph_s *gparse (const unsigned char *file);
 extern void printgraph (wgraph_s *g);
-extern wgraph_s *gparse (unsigned char *buf);
-
-
-/*tokenizing routines for graph data*/
-static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type);
-static gtoken_s *lex_ (unsigned char *buf);
-
 
 #endif
