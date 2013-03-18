@@ -8,25 +8,56 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
-struct chromosome_s
-{
-  uint64_t mask;
-  uint64_t data;
+/*
+ Counts the set bits in a long word:
+ 32-bit count code obtained from:
+ http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
+ */
+#define countbitsLW(lw) ((lw & 0xfff) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f \
++ (((lw & 0xfff000) >> 12) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f \
++ ((lw >> 24) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f
+
+static uint8_t bmap8[256] = {
+  0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,
+  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
+  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
+  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
+  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
+  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
+  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
+  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
+  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
+  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
+  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
+  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
+  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
+  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
+  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
+  4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8
 };
 
-pool_s *pool_s_ (uint16_t csize);
-void printlword (uint64_t lword, uint8_t mask);
+static pool_s *pool_s_ (uint16_t csize);
+static void printlword (uint64_t lword, uint8_t mask);
+static float getweight (pool_s *p, uint64_t *chrom);
 
 pool_s *pool_s_ (uint16_t csize)
 {
+  int i;
   pool_s *pool;
   
   pool = calloc(1, sizeof(*pool) + _POOLSIZE*_CQWORDSIZE(csize)*8);
   if (!pool)
     goto err_;
   pool->chromsize = (csize >> 6) + (csize % 64 != 0);
-  pool->cmask = csize % 64;
+  pool->remain = csize % 64;
+  for (i = 0; i < pool->remain; i++)
+    pool->cmask |= (1 << i);
+  printf("QWORD size: %d\n", pool->chromsize);
+  printf("Remainder: %d\nMask\n", pool->remain);
+  printlword(pool->cmask, 64);
+  printf ("\n");
   return pool;
   
 err_:
@@ -35,16 +66,24 @@ err_:
 
 pool_s *pool_init (wgraph_s *g)
 {
-  int i, n;
-  pool_s *pool;
+  uint16_t  i, j;
+  pool_s    *pool;
+  uint64_t  *ptr;
   
-  printf("nedges: %d\n", g->nedges);
-  pool = pool_s_(g->nedges);
+  pool = pool_s_(g->nvert);
   if (!pool)
     return NULL;
-  n = pool->chromsize*4*_POOLSIZE;
-  for (i = 0; i < n; i++)
-    ((uint16_t *)&pool->popul)[i] = (uint16_t)rand();  /*rand() returns a 4 byte integer, but it ignores the signed bit*/
+  ptr = pool->popul;
+  for (i = 0; i < _POOLSIZE; i++) {
+    for (j = 0; j < pool->chromsize; j++, ptr++) {
+      ((uint16_t *)ptr)[0] = (uint16_t)rand();
+      ((uint16_t *)ptr)[1] = (uint16_t)rand();
+      ((uint16_t *)ptr)[2] = (uint16_t)rand();
+      ((uint16_t *)ptr)[3] = (uint16_t)rand();
+      *ptr &= pool->cmask;
+    }
+  }
+  pool->graph = g;
   return pool;
 }
 
@@ -55,7 +94,7 @@ void printlword (uint64_t lword, uint8_t end)
   if (!end)
     end = 64;
   for (i = 0; i < end; i++)
-    printf("%d",(int)(((lword << i)) >> 63));
+    printf("%llu",(lword >> i) & 1);
 }
 
 void printpool (pool_s *p)
@@ -64,15 +103,88 @@ void printpool (pool_s *p)
   uint64_t *ptr;
   
   n = p->chromsize;
+  ptr = p->popul;
   for (index = 0; index < _POOLSIZE; index++) {
-    ptr = p->popul + index * n;
+    printf("%d:", index);
     for (i = 0; i < n; i++) {
       if (i == n-1)
-        printlword (ptr[i], p->cmask);
+        printlword (ptr[i], p->remain);
       else
         printlword (ptr[i], 64);
     }
+    printf("  %f, %d", getweight (p, ptr), ((uint8_t *)ptr)[7] >> (8 - _GET_CHBITLEN(p)));
     printf("\n");
+    ptr += n;
   }
 }
 
+
+int countdigits(pool_s *p, int index)
+{
+  int i, count, n;
+  uint64_t *cptr;
+
+  n = p->chromsize-1;
+  cptr = &p->popul[index * p->chromsize];
+  for (i = 0, count = 0; i < n; i++) {
+    count += countbitsLW((uint32_t)cptr[i]);
+    count += countbitsLW((uint32_t)(cptr[i] >> 32));
+  }
+  count += countbitsLW((uint32_t)(cptr[i] & p->cmask));
+  count += countbitsLW((uint32_t)((cptr[i] & p->cmask) >> 32));
+  return count;
+}
+
+int iscut(pool_s *p, uint64_t *chrom, vertex_s *v)
+{
+  uint16_t i, j;
+  uint64_t iter;
+  
+  for (i = 0; i < p->graph->nvert; i++) {
+    if (p->graph->vtable[i] == v) {
+      if (!(chrom[i / 64] & (1 << (i % 64))))
+        return 1;
+      return 0;
+    }
+  }
+  return 0;
+}
+
+float getweight (pool_s *p, uint64_t *chrom)
+{
+  uint8_t pos;
+  uint16_t i, j, csize;
+  uint64_t iter;
+  uint64_t *ptr;
+  vertex_s *v;
+  float weight;
+  
+  weight = 0;
+  for (i = 0, ptr = chrom; i < p->chromsize; i++, ptr++) {
+    csize = (i == p->chromsize-1) ? p->remain : 64;
+    for (iter = *ptr, pos = 0; pos <= csize; iter &= ~(1 << (pos-1))) {
+      pos = ffsl(iter);
+      if (!pos)
+        break;
+      v = p->graph->vtable[i*64 + pos-1];
+      for (j = 0; j < v->nedges; j++) {
+        if (iscut(p,ptr, (v->edges[j]->v1 == v) ? v->edges[j]->v2 : v->edges[j]->v1))
+          weight += v->edges[j]->weight;
+      }
+    }
+  }
+  return weight;
+}
+
+void printweights (pool_s *p)
+{
+  uint64_t *ptr;
+  uint16_t n, i;
+  
+  n = p->chromsize;
+  ptr = p->popul;
+  for (i = 0; i < _POOLSIZE; i++) {
+    printf("Weight: %f, %d\n",getweight (p, ptr), n);
+    ptr += n;
+  }
+}

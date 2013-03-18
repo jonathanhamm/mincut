@@ -1,10 +1,15 @@
 #include "gparse.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string.h>  
+
+static gtoken_s *stream_;
+
+wmap_s wmap_;
 
 /*reads file into a buffer*/
 static unsigned char *read_gfile(const char *fname);
+static void tablegen (void);
 
 /*tokenizing routines for graph data*/
 static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type);
@@ -28,9 +33,6 @@ static int insert_vertex (wgraph_s *graph, vertex_s *v);
 static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
 static vchain_s *vchain_s_ (void);
 static void printbyte (uint8_t b);
-static int chain_insert (vchain_s **chunk, vertex_s *v);
-
-static gtoken_s *stream_;
 
 wgraph_s *gparse (const unsigned char *file)
 {
@@ -83,6 +85,23 @@ err_:
   return NULL;
 }
 
+static void tablegen (void)
+{
+  uint8_t i, j, k;
+  float count;
+  
+  for (i = 0; i < 255; i++) {
+    count = 0;
+    for (j = 1, k = 0; j; j = j << 1, k++) {
+      if (j & i) {
+       // window[k] =
+      }
+        
+    }
+    printf("COUNT: %f\n", count);
+  }
+}
+
 /*
  *  Regex for node/edge definition lexemes:
  *  n: (a...Z)+(a...z+0...9)*
@@ -98,37 +117,27 @@ gtoken_s *lex_ (unsigned char *buf)
   for (curr = NULL, bckptr = buf; *buf != _UEOF;) {
     switch (*buf) {
       case ',':
-        printf("a\n");
         curr = gtoken_s_ (curr, ",", _COMMA);
         buf++;
         break;
       case '=':
-        printf("a\n");
-        
         curr = gtoken_s_ (curr, "=", _EQU);
         buf++;
         break;
       case '{':
-        printf("a\n");
-        
         curr = gtoken_s_ (curr, "{", _OPENBRACE);
         buf++;
         break;
       case '}':
-        printf("a\n");
-        
         buf++;
         curr = gtoken_s_ (curr, "}", _CLOSEBRACE);
         break;
       default:
-        printf("derp\n");
         if (*buf <= ' ') {
           printf("wut %x :%c:\n", *buf, *buf);
           while(*++buf <= ' ');
         }
         else if ((*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')) {
-          printf("b\n");
-          
           for (bckptr = buf, ++buf; (*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')
                || (*buf >= '0' && *buf <= '9'); buf++) {
             if (buf - bckptr == _MAXLEXLEN) {
@@ -211,6 +220,7 @@ wgraph_s *parse_ (void)
   if (!g)
     return NULL;
   pgraph_(g);
+  tablegen ();
   return g;
 }
 
@@ -265,9 +275,9 @@ void pedgeparam_ (wgraph_s *g)
 
 void e_ (wgraph_s *g)
 {
-  double      weight;
+  float      weight;
   vertex_s    *v1,
-  *v2;
+              *v2;
   
   if (__GTNEXT()->type == _OPENBRACE)
   if (__GTNEXT()->type == _ID) {
@@ -341,7 +351,9 @@ edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
 
 int insert_vertex (wgraph_s *graph, vertex_s *v)
 {
-  uint8_t index;
+  static uint16_t cvtablesize;
+  vertex_s **vtable;
+  /*uint8_t index;
   vrecord_s *rec;
   
   rec = &graph->vtable[*(uint64_t *)v->name % _VTABLE_SIZE];
@@ -349,16 +361,34 @@ int insert_vertex (wgraph_s *graph, vertex_s *v)
     rec->v = v;
     rec->isoccupied = 1;
   } else if (rec->isoccupied >= 1)
-    return chain_insert (&rec->chain, v);
+    return chain_insert (&rec->chain, v);*/
+
+  vtable = graph->vtable;
+  if (!vtable) {
+    vtable = calloc(_INITTSIZE, sizeof(*vtable));
+    if (!vtable)
+      return -1;
+    cvtablesize = _INITTSIZE;
+  } else {
+    if (graph->nvert == cvtablesize) {
+      cvtablesize += _INITTSIZE;
+      vtable = realloc (vtable, cvtablesize * sizeof(*vtable));
+      if (!vtable)
+        return -1;
+    }
+  }
+  vtable[graph->nvert] = v;
+  graph->vtable = vtable;
+  graph->nvert++;
 }
 
 vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
 {
-  uint8_t i;
+  uint16_t i;
   uint8_t it;
   vrecord_s *rec;
   vchain_s *iterator;
-  
+  /*
   rec = &graph->vtable[*(uint64_t *)key % _VTABLE_SIZE];
   if (!__IDCMP(key,rec->v->name)) {
     if (rec->isoccupied && rec->isoccupied != 1) {
@@ -372,8 +402,12 @@ vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
         return NULL;
     }
     return NULL;
+  }*/
+  for (i = 0; i < graph->nvert; i++) {
+    if (!strcmp(key,graph->vtable[i]->name))
+      return graph->vtable[i];
   }
-  return rec->v;
+  return NULL;
 }
 
 vchain_s *vchain_s_ (void)
@@ -396,65 +430,7 @@ void printbyte (uint8_t b)
   printf("\n");
 }
 
-int chain_insert (vchain_s **chunk, vertex_s *v)
-{
-  uint8_t i;
-  uint8_t it;
-  vchain_s *iter;
-  
-  if (*chunk == (vchain_s *)1) {
-    *chunk = vchain_s_();
-    if (!*chunk)
-      return 0;
-  }
-  for (iter = *chunk; iter->next; iter = iter->next);
-  i = ffs(iter->mem);
-  if (i) {
-    i--;
-    iter->mem &= ~(1 << i);
-    printbyte(iter->mem);
-    
-  } else {
-    iter->next = vchain_s_();
-    iter = iter->next;
-    if (!iter)
-      return 0;
-    iter->mem = 0xfe; /* 0b11111110 */
-  }
-  iter->chunk[i].v = v;
-  return 1;
-}
 
 void printgraph (wgraph_s *g)
 {
-  uint8_t i,
-  it;
-  uint16_t ei;
-  uint16_t index;
-  vchain_s *iter;
-  
-  for (index = 0; index < _VTABLE_SIZE; index++) {
-    if (g->vtable[index].isoccupied) {
-      printf("%s  ->\n",g->vtable[index].v->name);
-      for (ei = 0; ei < g->vtable[index].v->nedges; ei++) {
-        printf("\t%s,%s,%f\n",  g->vtable[index].v->edges[ei]->v1->name,
-               g->vtable[index].v->edges[ei]->v2->name,
-               g->vtable[index].v->edges[ei]->weight);
-      }
-      printf("\n");
-      if (g->vtable[index].isoccupied != 1) {
-        for (iter = g->vtable[index].chain; iter; iter = iter->next) {
-          for (i = 0, it = ~iter->mem; it; it &= ~(1 << i), i = ffs(it)-1) {
-            printf("%s  ->\n",iter->chunk[i].v->name);
-            for (ei = 0; ei < iter->chunk[i].v->nedges; ei++) {
-              printf("\t%s,%s,%f\n",  iter->chunk[i].v->edges[ei]->v1->name,
-                     iter->chunk[i].v->edges[ei]->v2->name,
-                     iter->chunk[i].v->edges[ei]->weight);
-            }
-          }
-          
-        }
-      }
-    }
-  }
 }
