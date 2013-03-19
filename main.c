@@ -21,7 +21,7 @@ int main (int argc, char **argv)
   clock_t sum = 0;
   for (i = 0; i < 1000000; i++) {
     t = clock();
-    x += countdigits(p,rand()%50);
+    //x += countdigits(p,rand()%50);
     fin = clock() - t;
     sum+=fin;
   }

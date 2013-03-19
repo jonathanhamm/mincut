@@ -235,12 +235,12 @@ void pgraph_ (wgraph_s *g)
 void pnodelist_ (wgraph_s *g)
 {
   if (*(uint16_t *)stream_->lexeme == *(uint16_t *)"V") /*if(!strcmp(stream_->lexeme,"v"))*/
-    if (__GTNEXT()->type == _EQU)
-      if (__GTNEXT()->type == _OPENBRACE)
-        if (__GTNEXT()->type == _ID) {
-          insert_vertex (g, vertex_s_(stream_));
-          pnodeparam_(g);
-        }
+  if (__GTNEXT()->type == _EQU)
+  if (__GTNEXT()->type == _OPENBRACE)
+  if (__GTNEXT()->type == _ID) {
+      insert_vertex (g, vertex_s_(stream_));
+      pnodeparam_(g);
+  }
   if (stream_->type == _CLOSEBRACE)
     return;
 }
@@ -248,18 +248,18 @@ void pnodelist_ (wgraph_s *g)
 void pnodeparam_ (wgraph_s *g)
 {
   if (__GTNEXT()->type == _COMMA)
-    if (__GTNEXT()->type == _ID) {
-      insert_vertex (g, vertex_s_(stream_));
-      pnodeparam_(g);
-    }
+  if (__GTNEXT()->type == _ID) {
+    insert_vertex (g, vertex_s_(stream_));
+    pnodeparam_(g);
+  }
 }
 
 void pedgelist_ (wgraph_s *g)
 {
   if (*(uint16_t *)__GTNEXT()->lexeme == *(uint16_t *)"E")   /*if (!strcmp(__GTNEXT()->lexeme, "E"))*/
-    if (__GTNEXT()->type == _EQU)
-      if (__GTNEXT()->type == _OPENBRACE)
-        e_(g);
+  if (__GTNEXT()->type == _EQU)
+  if (__GTNEXT()->type == _OPENBRACE)
+    e_(g);
   pedgeparam_(g);
   if (stream_->type == _CLOSEBRACE)
     return;

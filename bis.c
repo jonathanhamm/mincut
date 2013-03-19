@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 /*
  Counts the set bits in a long word:
@@ -40,7 +41,10 @@ static uint8_t bmap8[256] = {
 
 static pool_s *pool_s_ (uint16_t csize);
 static void printlword (uint64_t lword, uint8_t mask);
-static float getweight (pool_s *p, uint64_t *chrom);
+static float sumweights (pool_s *p, uint64_t *chrom);
+static float getfitness (pool_s *p, uint64_t *chrom);
+static float computeprob (pool_s *p);
+static int isfeasible (pool_s *p, uint64_t *chrom);
 
 pool_s *pool_s_ (uint16_t csize)
 {
@@ -112,20 +116,18 @@ void printpool (pool_s *p)
       else
         printlword (ptr[i], 64);
     }
-    printf("  %f, %d", getweight (p, ptr), ((uint8_t *)ptr)[7] >> (8 - _GET_CHBITLEN(p)));
+    printf("  %f, %d, %d", getfitness (p, ptr), ((uint8_t *)ptr)[7] >> (8 - _GET_CHBITLEN(p)), isfeasible (p, ptr));
     printf("\n");
     ptr += n;
   }
 }
 
 
-int countdigits(pool_s *p, int index)
+int countdigits (pool_s *p, uint64_t *cptr)
 {
   int i, count, n;
-  uint64_t *cptr;
 
   n = p->chromsize-1;
-  cptr = &p->popul[index * p->chromsize];
   for (i = 0, count = 0; i < n; i++) {
     count += countbitsLW((uint32_t)cptr[i]);
     count += countbitsLW((uint32_t)(cptr[i] >> 32));
@@ -142,7 +144,7 @@ int iscut(pool_s *p, uint64_t *chrom, vertex_s *v)
   
   for (i = 0; i < p->graph->nvert; i++) {
     if (p->graph->vtable[i] == v) {
-      if (!(chrom[i / 64] & (1 << (i % 64))))
+      if (!(chrom[i / 64] & (1 << (i%64))))
         return 1;
       return 0;
     }
@@ -150,7 +152,7 @@ int iscut(pool_s *p, uint64_t *chrom, vertex_s *v)
   return 0;
 }
 
-float getweight (pool_s *p, uint64_t *chrom)
+float sumweights (pool_s *p, uint64_t *chrom)
 {
   uint8_t pos;
   uint16_t i, j, csize;
@@ -159,14 +161,14 @@ float getweight (pool_s *p, uint64_t *chrom)
   vertex_s *v;
   float weight;
   
-  weight = 0;
-  for (i = 0, ptr = chrom; i < p->chromsize; i++, ptr++) {
+  for (weight = 0, i = 0, ptr = chrom; i < p->chromsize; i++, ptr++) {
     csize = (i == p->chromsize-1) ? p->remain : 64;
-    for (iter = *ptr, pos = 0; pos <= csize; iter &= ~(1 << (pos-1))) {
+    for (iter = *ptr, pos = 0; pos <= csize; iter &= ~(1 << pos)) {
       pos = ffsl(iter);
       if (!pos)
         break;
-      v = p->graph->vtable[i*64 + pos-1];
+      --pos;
+      v = p->graph->vtable[i*64 + pos];
       for (j = 0; j < v->nedges; j++) {
         if (iscut(p,ptr, (v->edges[j]->v1 == v) ? v->edges[j]->v2 : v->edges[j]->v1))
           weight += v->edges[j]->weight;
@@ -184,7 +186,38 @@ void printweights (pool_s *p)
   n = p->chromsize;
   ptr = p->popul;
   for (i = 0; i < _POOLSIZE; i++) {
-    printf("Weight: %f, %d\n",getweight (p, ptr), n);
+    printf("Weight: %f, %d, %d\n",sumweights (p, ptr), n, isfeasible(p, ptr));
     ptr += n;
   }
 }
+
+float getfitness (pool_s *p, uint64_t *chrom)
+{
+  int setcount, differ;
+  
+  setcount = countdigits (p, chrom);
+  differ = abs(2*setcount-_GET_CHBITLEN(p));
+  return sumweights (p, chrom) + (differ<<4);
+}
+
+float computeprob (pool_s *p)
+{
+  uint16_t i, n;
+  uint64_t *ptr;
+  float sum;
+  float fitbuf[_POOLSIZE];
+  
+  for (sum = 0, n = p->chromsize, ptr = p->popul, i = 0; i < _POOLSIZE; i++, ptr += n) {
+    fitbuf[i] = getfitness (p, ptr);
+    sum += fitbuf[i];
+  }
+  for (i = 0; i < _POOLSIZE; i++)
+    p->probuf[i] = sum / fitbuf[i];
+  return sum;
+}
+
+int isfeasible (pool_s *p, uint64_t *chrom)
+{
+  return (2*countdigits (p, chrom) == _GET_CHBITLEN(p));
+}
+
