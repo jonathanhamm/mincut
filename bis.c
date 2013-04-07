@@ -11,6 +11,9 @@
 #include <time.h>
 #include <math.h>
 
+#include <unistd.h>
+#include <signal.h>
+
 /*
  Counts the set bits in a long word:
  32-bit count code obtained from:
@@ -20,31 +23,17 @@
 + (((lw & 0xfff000) >> 12) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f \
 + ((lw >> 24) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f
 
-static uint8_t bmap8[256] = {
-  0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,
-  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
-  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
-  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
-  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
-  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
-  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
-  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
-  1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,
-  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
-  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
-  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
-  2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
-  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
-  3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
-  4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8
-};
-
+static pool_s *pool_init (wgraph_s *g);
+static void siginthandle(int signal);
 static pool_s *pool_s_ (uint16_t csize);
 static void printlword (uint64_t lword, uint8_t mask);
 static float sumweights (pool_s *p, uint64_t *chrom);
 static float getfitness (pool_s *p, uint64_t *chrom);
 static float computeprob (pool_s *p);
 static int isfeasible (pool_s *p, uint64_t *chrom);
+static void printchrom (pool_s *p, uint64_t *chrom);
+
+pool_s *pool_;
 
 pool_s *pool_s_ (uint16_t csize)
 {
@@ -54,10 +43,13 @@ pool_s *pool_s_ (uint16_t csize)
   pool = calloc(1, sizeof(*pool) + _POOLSIZE*_CQWORDSIZE(csize)*8);
   if (!pool)
     goto err_;
+  pool_ = pool;
   pool->chromsize = (csize >> 6) + (csize % 64 != 0);
   pool->remain = csize % 64;
   for (i = 0; i < pool->remain; i++)
     pool->cmask |= (1 << i);
+  pool->cross = singlepoint_cr;
+  pool->mutate = mutate1;
   printf("QWORD size: %d\n", pool->chromsize);
   printf("Remainder: %d\nMask\n", pool->remain);
   printlword(pool->cmask, 64);
@@ -77,6 +69,7 @@ pool_s *pool_init (wgraph_s *g)
   pool = pool_s_(g->nvert);
   if (!pool)
     return NULL;
+  pool->gen = 0;
   ptr = pool->popul;
   for (i = 0; i < _POOLSIZE; i++) {
     for (j = 0; j < pool->chromsize; j++, ptr++) {
@@ -101,6 +94,19 @@ void printlword (uint64_t lword, uint8_t end)
     printf("%llu",(lword >> i) & 1);
 }
 
+void printchrom (pool_s *p, uint64_t *chrom)
+{
+  uint16_t i, n;
+  
+  n = p->chromsize;
+  for (i = 0; i < n; i++) {
+    if (i == n-1)
+      printlword (chrom[i], p->remain);
+    else
+      printlword (chrom[i], 64);
+  }
+}
+
 void printpool (pool_s *p)
 {
   uint16_t i, n, index;
@@ -110,18 +116,12 @@ void printpool (pool_s *p)
   ptr = p->popul;
   for (index = 0; index < _POOLSIZE; index++) {
     printf("%d:", index);
-    for (i = 0; i < n; i++) {
-      if (i == n-1)
-        printlword (ptr[i], p->remain);
-      else
-        printlword (ptr[i], 64);
-    }
+    printchrom (p, ptr);
     printf("  %f, %d, %d", getfitness (p, ptr), ((uint8_t *)ptr)[7] >> (8 - _GET_CHBITLEN(p)), isfeasible (p, ptr));
     printf("\n");
     ptr += n;
   }
 }
-
 
 int countdigits (pool_s *p, uint64_t *cptr)
 {
@@ -200,24 +200,130 @@ float getfitness (pool_s *p, uint64_t *chrom)
   return sumweights (p, chrom) + (differ<<4);
 }
 
+int prcmp (roulette_s *a, roulette_s *b)
+{
+  if (a->prob < b->prob)
+    return -1;
+  if (a->prob > b->prob)
+    return 1;
+  return 0;
+}
+
 float computeprob (pool_s *p)
 {
   uint16_t i, n;
   uint64_t *ptr;
   float sum;
-  float fitbuf[_POOLSIZE];
+  roulette_s roul[_POOLSIZE];
   
   for (sum = 0, n = p->chromsize, ptr = p->popul, i = 0; i < _POOLSIZE; i++, ptr += n) {
-    fitbuf[i] = getfitness (p, ptr);
-    sum += fitbuf[i];
+    roul[i].prob = getfitness (p, ptr);
+    roul[i].ptr = ptr;
+    sum += roul[i].prob;
   }
-  for (i = 0; i < _POOLSIZE; i++)
-    p->probuf[i] = sum / fitbuf[i];
+  for (i = 0; i < _POOLSIZE; i++) {
+    p->rbuf[i].prob = sum / roul[i].prob;
+    p->rbuf[i].ptr = roul[i].ptr;
+  }
+  qsort (p->rbuf, _POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
   return sum;
 }
 
 int isfeasible (pool_s *p, uint64_t *chrom)
 {
   return (2*countdigits (p, chrom) == _GET_CHBITLEN(p));
+}
+
+
+void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
+{
+  uint16_t  point,
+            remain,
+            index, i,
+            bitlen;
+  uint64_t  tmp1, tmp2, mask;
+  
+  bitlen = _GET_CHBITLEN(p);
+  point = rand() % bitlen;
+  index = point % 64;
+  tmp1 = *p1;
+  tmp2 = *p2;
+  for (i = 0, mask = 0; i < index+1; i++)
+    mask |= (1 << i);
+  *p1 = p2[point / 64] >> (index+1);
+  p2[point / 64] = ((tmp1 & mask) << (bitlen-(index+1)));
+  *p2 |= tmp1 >> (index+1);
+  p1[point / 64] |= ((tmp2 & mask) << (bitlen-(index+1)));
+}
+
+void doublepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
+{
+  
+}
+
+void mutate1 (pool_s *p, uint64_t *victim)
+{
+  
+}
+
+#define CBUF_SIZE 8
+
+int run_ge (wgraph_s *g)
+{
+  pid_t pid;
+  pool_s *p;
+  uint16_t i1, i2, n;
+  int index;
+  char cbuf[CBUF_SIZE];
+  
+  if (signal(SIGINT, siginthandle) == SIG_ERR)
+    return 1;
+  pid = fork();
+  if (pid) {
+    cbuf[7] = '\0';
+    while (1) {
+      index = 0;
+      while ((cbuf[index] = (char)getchar()) != '\n') {
+        if (index < CBUF_SIZE-1)
+          ++index;
+      }
+      cbuf[index] = '\0';
+      if (!strcmp(cbuf, "new")) {
+        printf("Migrating: %d\n", getpid());
+      }
+      else if (!strcmp(cbuf, "status")) {
+        printf ("Status of Generation: %llu\n", p->gen);
+      }
+      else if (!(
+                  strcmp(cbuf, "exit")  &&
+                  strcmp(cbuf, "Q")     &&
+                  strcmp(cbuf, "q")     &&
+                  strcmp(cbuf, "quit")
+                )
+      )
+      {
+        kill(pid, SIGINT);
+        exit(EXIT_SUCCESS);
+      }
+    }
+  }
+  else {
+    if (signal(SIGINT, siginthandle) == SIG_ERR)
+      return 1;
+    while (1) {
+      computeprob (p);
+      i1 = rand()%_POOLSIZE;
+      while ((i2 = rand()%_POOLSIZE) == i1);
+      p->cross (p, p->rbuf[i1*n].ptr, p->rbuf[i2*n].ptr);
+      p->mutate (p, p->popul);
+      ++p->gen;
+    }
+  }
+  return 0;
+}
+
+void siginthandle (int signal)
+{
+  exit(EXIT_SUCCESS);
 }
 

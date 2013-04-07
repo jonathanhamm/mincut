@@ -85,23 +85,6 @@ err_:
   return NULL;
 }
 
-static void tablegen (void)
-{
-  uint8_t i, j, k;
-  float count;
-  
-  for (i = 0; i < 255; i++) {
-    count = 0;
-    for (j = 1, k = 0; j; j = j << 1, k++) {
-      if (j & i) {
-       // window[k] =
-      }
-        
-    }
-    printf("COUNT: %f\n", count);
-  }
-}
-
 /*
  *  Regex for node/edge definition lexemes:
  *  n: (a...Z)+(a...z+0...9)*
@@ -220,7 +203,6 @@ wgraph_s *parse_ (void)
   if (!g)
     return NULL;
   pgraph_(g);
-  tablegen ();
   return g;
 }
 
@@ -433,4 +415,5 @@ void printbyte (uint8_t b)
 
 void printgraph (wgraph_s *g)
 {
+
 }

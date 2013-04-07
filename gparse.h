@@ -3,11 +3,12 @@
 
 #include <stdint.h>
 
-#define _VTABLE_SIZE 19
+#define _MAPNODE_SIZE 4
 #define _CHUNK_SIZE 8
 #define _UEOF (unsigned char)EOF
 #define _INITBUFSIZE 256
 #define _MAXLEXLEN 15
+#define _INITTSIZE 32
 
 /*TTYPES*/
 #define _ID         1
@@ -35,6 +36,7 @@ typedef struct vrecord_s vrecord_s;
 typedef struct vertex_s vertex_s;
 typedef struct vchain_s vchain_s;
 typedef struct edge_s edge_s;
+typedef struct wmap_s wmap_s;
 
 struct vrecord_s
 {
@@ -47,9 +49,9 @@ struct vrecord_s
 
 struct wgraph_s
 {
-  uint16_t nedges;
-  uint16_t nvert;
-  vrecord_s vtable[_VTABLE_SIZE];
+  uint16_t  nedges;
+  uint16_t  nvert;
+  vertex_s  **vtable;
 };
 
 
@@ -78,9 +80,15 @@ struct vertex_s
 
 struct edge_s
 {
-  double weight;
+  float weight;
   vertex_s *v1;
   vertex_s *v2;
+};
+
+struct wmap_s
+{
+  float map[_MAPNODE_SIZE][256];
+  wmap_s *next;
 };
 
 /*graph data structure routines*/
