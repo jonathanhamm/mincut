@@ -91,6 +91,9 @@ struct wmap_s
   wmap_s *next;
 };
 
+extern gtoken_s *lex_ (unsigned char *buf);
+extern void freetokens (gtoken_s *list);
+
 /*graph data structure routines*/
 extern wgraph_s *gparse (const unsigned char *file);
 extern void printgraph (wgraph_s *g);

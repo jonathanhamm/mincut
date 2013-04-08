@@ -13,7 +13,6 @@ static void tablegen (void);
 
 /*tokenizing routines for graph data*/
 static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type);
-static gtoken_s *lex_ (unsigned char *buf);
 
 /*graph parsing routines*/
 static wgraph_s *parse_ (void);
@@ -116,10 +115,8 @@ gtoken_s *lex_ (unsigned char *buf)
         curr = gtoken_s_ (curr, "}", _CLOSEBRACE);
         break;
       default:
-        if (*buf <= ' ') {
-          printf("wut %x :%c:\n", *buf, *buf);
+        if (*buf <= ' ')
           while(*++buf <= ' ');
-        }
         else if ((*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')) {
           for (bckptr = buf, ++buf; (*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')
                || (*buf >= '0' && *buf <= '9'); buf++) {
@@ -133,7 +130,6 @@ gtoken_s *lex_ (unsigned char *buf)
           curr = gtoken_s_ (curr, bckptr, _ID);
           *buf = backup;
         } else if (*buf >= '0' && *buf <= '9') {
-          printf("c\n");
           for (bckptr = buf, buf++; (*buf >= '0' && *buf <= '9'); buf++) {
             if (buf - bckptr == _MAXLEXLEN) {
               printf("Too Long ID: %15s", bckptr);
@@ -159,12 +155,20 @@ gtoken_s *lex_ (unsigned char *buf)
         break;
     }
   }
-  curr = gtoken_s_ (curr, "\xff", _EOF);
-  for (curr = stream_; curr; curr = curr->next)
-    printf("%s\n",curr->lexeme);
+  curr = gtoken_s_ (curr, "$", _EOF);
   return stream_;
 err_:
   return NULL;
+}
+
+void freetokens (gtoken_s *list)
+{
+  gtoken_s *backup;
+  while (list) {
+    backup = list;
+    list = list->next;
+    free (backup);
+  }
 }
 
 /*  Graph Parsing Routines */

@@ -24,7 +24,11 @@
 + ((lw >> 24) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f
 
 static pool_s *pool_init (wgraph_s *g);
+
+static void sigdummy (int signal);
 static void siginthandle(int signal);
+static void sigquithandle (int signal);
+
 static pool_s *pool_s_ (uint16_t csize);
 static void printlword (uint64_t lword, uint8_t mask);
 static float sumweights (pool_s *p, uint64_t *chrom);
@@ -33,7 +37,7 @@ static float computeprob (pool_s *p);
 static int isfeasible (pool_s *p, uint64_t *chrom);
 static void printchrom (pool_s *p, uint64_t *chrom);
 
-pool_s *pool_;
+static pool_s *pool_;
 
 pool_s *pool_s_ (uint16_t csize)
 {
@@ -115,7 +119,7 @@ void printpool (pool_s *p)
   n = p->chromsize;
   ptr = p->popul;
   for (index = 0; index < _POOLSIZE; index++) {
-    printf("%d:", index);
+    printf("%d:\t", index);
     printchrom (p, ptr);
     printf("  %f, %d, %d", getfitness (p, ptr), ((uint8_t *)ptr)[7] >> (8 - _GET_CHBITLEN(p)), isfeasible (p, ptr));
     printf("\n");
@@ -197,7 +201,7 @@ float getfitness (pool_s *p, uint64_t *chrom)
   
   setcount = countdigits (p, chrom);
   differ = abs(2*setcount-_GET_CHBITLEN(p));
-  return sumweights (p, chrom) + (differ<<4);
+  return sumweights (p, chrom) + (differ<<8);
 }
 
 int prcmp (roulette_s *a, roulette_s *b)
@@ -234,7 +238,6 @@ int isfeasible (pool_s *p, uint64_t *chrom)
   return (2*countdigits (p, chrom) == _GET_CHBITLEN(p));
 }
 
-
 void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
 {
   uint16_t  point,
@@ -243,6 +246,8 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
             bitlen;
   uint64_t  tmp1, tmp2, mask;
   
+  if ((p1 == p->rbuf[49].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[49].ptr && isfeasible(p, p2)))
+    return;
   bitlen = _GET_CHBITLEN(p);
   point = rand() % bitlen;
   index = point % 64;
@@ -266,7 +271,7 @@ void mutate1 (pool_s *p, uint64_t *victim)
   
 }
 
-#define CBUF_SIZE 8
+#define CBUF_SIZE 32
 
 int run_ge (wgraph_s *g)
 {
@@ -274,25 +279,35 @@ int run_ge (wgraph_s *g)
   pool_s *p;
   uint16_t i1, i2, n;
   int index;
-  char cbuf[CBUF_SIZE];
+  unsigned char cbuf[CBUF_SIZE];
+  gtoken_s *tokens;
   
-  if (signal(SIGINT, siginthandle) == SIG_ERR)
-    return 1;
+  if (signal(SIGINT, sigdummy) == SIG_ERR)
+    return -1;
+  memset (cbuf, 0, sizeof(cbuf));
   pid = fork();
   if (pid) {
-    cbuf[7] = '\0';
+    cbuf[CBUF_SIZE-1] = _UEOF;
+    p = malloc(sizeof(*p));
+    if (!p)
+      return -1;
     while (1) {
       index = 0;
       while ((cbuf[index] = (char)getchar()) != '\n') {
-        if (index < CBUF_SIZE-1)
+        if (index < CBUF_SIZE-2)
           ++index;
       }
       cbuf[index] = '\0';
+      cbuf[index+1] = _UEOF;
+      tokens = lex_ (cbuf);
       if (!strcmp(cbuf, "new")) {
         printf("Migrating: %d\n", getpid());
       }
       else if (!strcmp(cbuf, "status")) {
-        printf ("Status of Generation: %llu\n", p->gen);
+        kill (pid, SIGINT);
+      }
+      else if (!strcmp(cbuf, "show")) {
+        
       }
       else if (!(
                   strcmp(cbuf, "exit")  &&
@@ -302,14 +317,22 @@ int run_ge (wgraph_s *g)
                 )
       )
       {
+        printf("Final:\n");
         kill(pid, SIGINT);
+        pause();
+        kill(pid, SIGQUIT);
         exit(EXIT_SUCCESS);
       }
+      freetokens (tokens);
     }
   }
   else {
     if (signal(SIGINT, siginthandle) == SIG_ERR)
-      return 1;
+      return -1;
+    if (signal(SIGQUIT, sigquithandle) == SIG_ERR)
+      return -1;
+    p = pool_init (g);
+    n = p->chromsize;
     while (1) {
       computeprob (p);
       i1 = rand()%_POOLSIZE;
@@ -324,6 +347,20 @@ int run_ge (wgraph_s *g)
 
 void siginthandle (int signal)
 {
+  printf("Status at Generation: %llu\n", pool_->gen);
+  printpool(pool_);
+  printf("\nMost Fit ( weight = %f ):\n",sumweights(pool_,pool_->rbuf[49].ptr));
+  printchrom (pool_, pool_->rbuf[49].ptr);
+  if (isfeasible(pool_, pool_->rbuf[49].ptr))
+      printf("\nIs Feasible\n");
+  else
+    printf("\nNot Feasible\n");
+  kill(getppid(), SIGINT);
+}
+
+void sigquithandle (int signal)
+{
   exit(EXIT_SUCCESS);
 }
 
+void sigdummy (int signal){}
