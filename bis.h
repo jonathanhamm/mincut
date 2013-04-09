@@ -30,6 +30,8 @@ struct pool_s
   pool_s *parent;
   pool_s *child;
   wgraph_s *graph;
+  uint64_t *crbackup;
+  uint64_t *crmask;
   void (*cross) (pool_s *, uint64_t *, uint64_t *);
   void (*mutate) (pool_s *, uint64_t *);
   roulette_s rbuf[_POOLSIZE];
@@ -46,6 +48,8 @@ extern void printweights (pool_s *p);
 
 /* Crossover Functions */
 void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2);
+void mask_cr (pool_s *p, uint64_t *p1, uint64_t *p2);
+
 
 /* Mutation Function */
 void mutate1 (pool_s *p, uint64_t *victim);

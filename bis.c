@@ -52,7 +52,7 @@ pool_s *pool_s_ (uint16_t csize)
   pool->remain = csize % 64;
   for (i = 0; i < pool->remain; i++)
     pool->cmask |= (1 << i);
-  pool->cross = singlepoint_cr;
+  pool->cross = mask_cr;
   pool->mutate = mutate1;
   printf("QWORD size: %d\n", pool->chromsize);
   printf("Remainder: %d\nMask\n", pool->remain);
@@ -84,6 +84,12 @@ pool_s *pool_init (wgraph_s *g)
       *ptr &= pool->cmask;
     }
   }
+  pool->crbackup = malloc(pool->chromsize * sizeof(uint64_t));
+  if (!pool->crbackup)
+    return NULL;
+  pool->crmask = malloc (pool->chromsize * sizeof(uint64_t));
+  if (!pool->crmask)
+    return NULL;
   pool->graph = g;
   return pool;
 }
@@ -246,7 +252,7 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
             bitlen;
   uint64_t  tmp1, tmp2, mask;
   
-  if ((p1 == p->rbuf[49].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[49].ptr && isfeasible(p, p2)))
+  if ((p1 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p, p2)))
     return;
   bitlen = _GET_CHBITLEN(p);
   point = rand() % bitlen;
@@ -261,14 +267,59 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
   p1[point / 64] |= ((tmp2 & mask) << (bitlen-(index+1)));
 }
 
-void doublepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
+
+/*
+ xyz  f
+ ------
+ 000 | 0
+ 001 | 0
+ 010 | 0
+ 011 | 1
+ 100 | 1
+ 101 | 0
+ 110 | 1
+ 111 | 1
+ 
+    00 01 11 10
+ ---------------
+ 0|  0  0  1  1
+ 1|  0  1  1  0
+ 
+ f = (~z)x+zy
+*/
+void mask_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
 {
-  
+  uint16_t i;
+  uint64_t *mask, *backup;
+  /*  f = ((~mask) & p1) | (mask & p2) */
+
+  if ((p1 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p, p2)))
+    return;
+  mask = p->crmask;
+  backup = p->crbackup;
+  for (i = 0; i < p->chromsize; i++) {
+    ((uint16_t *)mask)[0] = (uint16_t)rand();
+    ((uint16_t *)mask)[1] = (uint16_t)rand();
+    ((uint16_t *)mask)[2] = (uint16_t)rand();
+    ((uint16_t *)mask)[3] = (uint16_t)rand();
+    backup[i] = p1[i];
+    p1[i] = (~mask[i] & p1[i]) | (mask[i] & p2[i]);
+    p2[i] = (mask[i] & backup[i]) | (~mask[i] & p2[i]);
+  }
+  p1[i-1] &= p->cmask;
+  p2[i-1] &= p->cmask;
+  if (rand() % 100 < _MUTATIONPROB) {
+    p->mutate (p, p1);
+    p->mutate (p, p2);
+  }
 }
 
 void mutate1 (pool_s *p, uint64_t *victim)
 {
+  uint16_t index;
   
+  index = rand() % _GET_CHBITLEN(p);
+  victim[index / 64] ^= (1 << index);
 }
 
 #define CBUF_SIZE 32
@@ -280,40 +331,43 @@ int run_ge (wgraph_s *g)
   uint16_t i1, i2, n;
   int index;
   unsigned char cbuf[CBUF_SIZE];
-  gtoken_s *tokens;
+  gtoken_s *head, *tokens;
   
   if (signal(SIGINT, sigdummy) == SIG_ERR)
     return -1;
   memset (cbuf, 0, sizeof(cbuf));
+  p = pool_init (g);
+  if (!p)
+    return -1;
   pid = fork();
   if (pid) {
     cbuf[CBUF_SIZE-1] = _UEOF;
-    p = malloc(sizeof(*p));
-    if (!p)
-      return -1;
     while (1) {
       index = 0;
       while ((cbuf[index] = (char)getchar()) != '\n') {
-        if (index < CBUF_SIZE-2)
+        if (index < CBUF_SIZE-1)
           ++index;
       }
-      cbuf[index] = '\0';
-      cbuf[index+1] = _UEOF;
-      tokens = lex_ (cbuf);
-      if (!strcmp(cbuf, "new")) {
+      cbuf[index] = _UEOF;
+      head = lex_ (cbuf);
+      tokens = head;
+      if (!strcmp(tokens->lexeme, "new")) {
         printf("Migrating: %d\n", getpid());
+        tokens = tokens->next;
+        if (!strcmp (tokens->lexeme, "singlepoint"))
+          p->cross = singlepoint_cr;
       }
-      else if (!strcmp(cbuf, "status")) {
+      else if (!strcmp(tokens->lexeme, "status")) {
         kill (pid, SIGINT);
       }
-      else if (!strcmp(cbuf, "show")) {
+      else if (!strcmp(tokens->lexeme, "show")) {
         
       }
       else if (!(
-                  strcmp(cbuf, "exit")  &&
-                  strcmp(cbuf, "Q")     &&
-                  strcmp(cbuf, "q")     &&
-                  strcmp(cbuf, "quit")
+                  strcmp(tokens->lexeme, "exit")  &&
+                  strcmp(tokens->lexeme, "Q")     &&
+                  strcmp(tokens->lexeme, "q")     &&
+                  strcmp(tokens->lexeme, "quit")
                 )
       )
       {
@@ -323,7 +377,7 @@ int run_ge (wgraph_s *g)
         kill(pid, SIGQUIT);
         exit(EXIT_SUCCESS);
       }
-      freetokens (tokens);
+      freetokens (head);
     }
   }
   else {
@@ -331,13 +385,12 @@ int run_ge (wgraph_s *g)
       return -1;
     if (signal(SIGQUIT, sigquithandle) == SIG_ERR)
       return -1;
-    p = pool_init (g);
     n = p->chromsize;
     while (1) {
       computeprob (p);
       i1 = rand()%_POOLSIZE;
       while ((i2 = rand()%_POOLSIZE) == i1);
-      p->cross (p, p->rbuf[i1*n].ptr, p->rbuf[i2*n].ptr);
+      p->cross (p, p->rbuf[i1 * n].ptr, p->rbuf[i2 * n].ptr);
       p->mutate (p, p->popul);
       ++p->gen;
     }
@@ -349,9 +402,9 @@ void siginthandle (int signal)
 {
   printf("Status at Generation: %llu\n", pool_->gen);
   printpool(pool_);
-  printf("\nMost Fit ( weight = %f ):\n",sumweights(pool_,pool_->rbuf[49].ptr));
-  printchrom (pool_, pool_->rbuf[49].ptr);
-  if (isfeasible(pool_, pool_->rbuf[49].ptr))
+  printf("\nMost Fit ( weight = %f ):\n",sumweights(pool_,pool_->rbuf[_POOLSIZE-1].ptr));
+  printchrom (pool_, pool_->rbuf[_POOLSIZE-1].ptr);
+  if (isfeasible(pool_, pool_->rbuf[_POOLSIZE-1].ptr))
       printf("\nIs Feasible\n");
   else
     printf("\nNot Feasible\n");
