@@ -38,6 +38,11 @@ typedef struct vchain_s vchain_s;
 typedef struct edge_s edge_s;
 typedef struct wmap_s wmap_s;
 
+#define _VHTABLESIZE 19
+typedef struct vhash_s vhash_;
+typedef struct vrec_s vrec_s;
+
+
 struct vrecord_s
 {
   vertex_s *v;
@@ -83,6 +88,20 @@ struct edge_s
   float weight;
   vertex_s *v1;
   vertex_s *v2;
+};
+
+struct vrec_s
+{
+  edge_s *edge;
+  union {
+    int isoccupied;
+    vrec_s *next;
+  };
+};
+
+struct vhash_s
+{
+  edge_s *edge;
 };
 
 struct wmap_s

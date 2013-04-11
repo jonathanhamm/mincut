@@ -35,6 +35,12 @@
 		2F19D5A416E19CEC00554277 /* gparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = gparse.h; path = ../../gparse.h; sourceTree = "<group>"; };
 		2F19D5A516E19CEC00554277 /* gparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = gparse.c; path = ../../gparse.c; sourceTree = "<group>"; };
 		2F19D5A816EFFB4600554277 /* bis.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = bis.c; path = ../../bis.c; sourceTree = "<group>"; };
+		2F738736171653010080641B /* toy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = toy; path = ../../toy; sourceTree = "<group>"; };
+		2F73873717166F180080641B /* test64 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test64; path = ../../test64; sourceTree = "<group>"; };
+		2F73874D1716BFBF0080641B /* test128 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test128; path = ../../test128; sourceTree = "<group>"; };
+		2F73874E1716C11B0080641B /* test256 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test256; path = ../../test256; sourceTree = "<group>"; };
+		2F73874F1716C5C40080641B /* test192 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test192; path = ../../test192; sourceTree = "<group>"; };
+		2F7387501716C6330080641B /* test150 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test150; path = ../../test150; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,6 +73,12 @@
 		2F097CC016CDF40D00856678 /* gen */ = {
 			isa = PBXGroup;
 			children = (
+				2F7387501716C6330080641B /* test150 */,
+				2F73874F1716C5C40080641B /* test192 */,
+				2F73874E1716C11B0080641B /* test256 */,
+				2F73874D1716BFBF0080641B /* test128 */,
+				2F73873717166F180080641B /* test64 */,
+				2F738736171653010080641B /* toy */,
 				2F19D5A816EFFB4600554277 /* bis.c */,
 				2F19D5A416E19CEC00554277 /* gparse.h */,
 				2F19D5A516E19CEC00554277 /* gparse.c */,

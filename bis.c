@@ -50,8 +50,12 @@ pool_s *pool_s_ (uint16_t csize)
   pool_ = pool;
   pool->chromsize = (csize >> 6) + (csize % 64 != 0);
   pool->remain = csize % 64;
-  for (i = 0; i < pool->remain; i++)
-    pool->cmask |= (1 << i);
+  if (!(csize % 64) && csize)
+    pool->cmask = 0xffffffffffffffffllu;
+  else {
+    for (i = 0; i < pool->remain; i++)
+        pool->cmask |= (1llu << i);
+  }
   pool->cross = mask_cr;
   pool->mutate = mutate1;
   printf("QWORD size: %d\n", pool->chromsize);
@@ -81,8 +85,8 @@ pool_s *pool_init (wgraph_s *g)
       ((uint16_t *)ptr)[1] = (uint16_t)rand();
       ((uint16_t *)ptr)[2] = (uint16_t)rand();
       ((uint16_t *)ptr)[3] = (uint16_t)rand();
-      *ptr &= pool->cmask;
     }
+     *(ptr-1) &= pool->cmask;
   }
   pool->crbackup = malloc(pool->chromsize * sizeof(uint64_t));
   if (!pool->crbackup)
@@ -154,7 +158,7 @@ int iscut(pool_s *p, uint64_t *chrom, vertex_s *v)
   
   for (i = 0; i < p->graph->nvert; i++) {
     if (p->graph->vtable[i] == v) {
-      if (!(chrom[i / 64] & (1 << (i%64))))
+      if (!(chrom[i / 64] & (1llu << (i%64))))
         return 1;
       return 0;
     }
@@ -172,8 +176,11 @@ float sumweights (pool_s *p, uint64_t *chrom)
   float weight;
   
   for (weight = 0, i = 0, ptr = chrom; i < p->chromsize; i++, ptr++) {
-    csize = (i == p->chromsize-1) ? p->remain : 64;
-    for (iter = *ptr, pos = 0; pos <= csize; iter &= ~(1 << pos)) {
+    if (i == p->chromsize-1 && p->remain)
+      csize = p->remain;
+    else
+      csize = 64;
+    for (iter = *ptr, pos = 0; pos <= csize; iter &= ~(1llu << pos)) {
       pos = ffsl(iter);
       if (!pos)
         break;
@@ -207,7 +214,7 @@ float getfitness (pool_s *p, uint64_t *chrom)
   
   setcount = countdigits (p, chrom);
   differ = abs(2*setcount-_GET_CHBITLEN(p));
-  return sumweights (p, chrom) + (differ<<8);
+  return sumweights (p, chrom) + (differ<<(3*p->chromsize));
 }
 
 int prcmp (roulette_s *a, roulette_s *b)
@@ -231,8 +238,9 @@ float computeprob (pool_s *p)
     roul[i].ptr = ptr;
     sum += roul[i].prob;
   }
-  for (i = 0; i < _POOLSIZE; i++) {
+  for (i = 0, p->accum = 0; i < _POOLSIZE; i++) {
     p->rbuf[i].prob = sum / roul[i].prob;
+    p->accum += p->rbuf[i].prob;
     p->rbuf[i].ptr = roul[i].ptr;
   }
   qsort (p->rbuf, _POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
@@ -260,13 +268,12 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
   tmp1 = *p1;
   tmp2 = *p2;
   for (i = 0, mask = 0; i < index+1; i++)
-    mask |= (1 << i);
+    mask |= (1llu << i);
   *p1 = p2[point / 64] >> (index+1);
   p2[point / 64] = ((tmp1 & mask) << (bitlen-(index+1)));
   *p2 |= tmp1 >> (index+1);
   p1[point / 64] |= ((tmp2 & mask) << (bitlen-(index+1)));
 }
-
 
 /*
  xyz  f
@@ -286,15 +293,25 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
  1|  0  1  1  0
  
  f = (~z)x+zy
+ 
+ Masking Crossover
 */
 void mask_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
 {
   uint16_t i;
-  uint64_t *mask, *backup;
+  uint64_t *mask, *backup, *dst1, *dst2;
   /*  f = ((~mask) & p1) | (mask & p2) */
 
-  if ((p1 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p, p2)))
-    return;
+  if (p1 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p,p1))
+    dst1 = p->rbuf[0].ptr;
+  else
+    dst1 = p1;
+  if (p2 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p, p2))
+    dst2 = p->rbuf[0].ptr;
+  else
+    dst2 = p2;
+  if (dst1 == dst2)
+    dst2 = p->rbuf[1%_POOLSIZE].ptr;
   mask = p->crmask;
   backup = p->crbackup;
   for (i = 0; i < p->chromsize; i++) {
@@ -303,23 +320,25 @@ void mask_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
     ((uint16_t *)mask)[2] = (uint16_t)rand();
     ((uint16_t *)mask)[3] = (uint16_t)rand();
     backup[i] = p1[i];
-    p1[i] = (~mask[i] & p1[i]) | (mask[i] & p2[i]);
-    p2[i] = (mask[i] & backup[i]) | (~mask[i] & p2[i]);
+    dst1[i] = (~mask[i] & p1[i]) | (mask[i] & p2[i]);
+    dst2[i] = (mask[i] & backup[i]) | (~mask[i] & p2[i]);
   }
-  p1[i-1] &= p->cmask;
-  p2[i-1] &= p->cmask;
+  dst1[i-1] &= p->cmask;
+  dst2[i-1] &= p->cmask;
   if (rand() % 100 < _MUTATIONPROB) {
-    p->mutate (p, p1);
-    p->mutate (p, p2);
+    p->mutate (p, dst1);
+    p->mutate (p, dst2);
   }
 }
 
 void mutate1 (pool_s *p, uint64_t *victim)
 {
-  uint16_t index;
+  uint16_t index, i;
   
   index = rand() % _GET_CHBITLEN(p);
-  victim[index / 64] ^= (1 << index);
+  victim[index / 64] ^= (1llu << index);
+  index = rand() % _GET_CHBITLEN(p);
+  victim[index / 64] ^= (1llu << index);
 }
 
 #define CBUF_SIZE 32
@@ -328,8 +347,8 @@ int run_ge (wgraph_s *g)
 {
   pid_t pid;
   pool_s *p;
-  uint16_t i1, i2, n;
-  int index;
+  uint16_t n, index;
+  float i1, i2;
   unsigned char cbuf[CBUF_SIZE];
   gtoken_s *head, *tokens;
   
@@ -377,6 +396,9 @@ int run_ge (wgraph_s *g)
         kill(pid, SIGQUIT);
         exit(EXIT_SUCCESS);
       }
+      else {
+        printf("'%s' not recognized.\n",tokens->lexeme);
+      }
       freetokens (head);
     }
   }
@@ -387,11 +409,12 @@ int run_ge (wgraph_s *g)
       return -1;
     n = p->chromsize;
     while (1) {
-      computeprob (p);
-      i1 = rand()%_POOLSIZE;
-      while ((i2 = rand()%_POOLSIZE) == i1);
-      p->cross (p, p->rbuf[i1 * n].ptr, p->rbuf[i2 * n].ptr);
-      p->mutate (p, p->popul);
+      computeprob (p);        
+      i1 = (float)(rand()%p->accum);
+      i2 = (float)(rand()%p->accum);
+      i1 = _POOLSIZE * i1/p->accum;
+      i2 = _POOLSIZE * i2/p->accum;
+      p->cross (p, p->rbuf[(int)i1].ptr, p->rbuf[(int)i2].ptr);
       ++p->gen;
     }
   }

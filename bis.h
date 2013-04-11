@@ -3,11 +3,11 @@
 
 #include <stdint.h>
 
-#define _MUTATIONPROB 5
+#define _MUTATIONPROB 3
 #define _POOLSIZE 50
 #define _GET_CHRBYSIZE(pool) ((pool->chromsize >> 3) + \
                                   (pool->chromsize % 8 != 0))
-#define _GET_CHBITLEN(pool) ((pool->chromsize << 6) - (64 - pool->remain))
+#define _GET_CHBITLEN(pool) ((pool->remain) ? ((pool->chromsize << 6) - (64 - pool->remain)) : pool->chromsize*64)
 #define _CQWORDSIZE(csize) (((csize) >> 6) + ((csize) % 64 != 0)) 
 
 typedef struct pool_s pool_s;
@@ -34,6 +34,7 @@ struct pool_s
   uint64_t *crmask;
   void (*cross) (pool_s *, uint64_t *, uint64_t *);
   void (*mutate) (pool_s *, uint64_t *);
+  uint16_t accum;
   roulette_s rbuf[_POOLSIZE];
   uint64_t popul[0];
 };
