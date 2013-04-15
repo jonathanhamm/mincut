@@ -68,34 +68,11 @@ struct gtoken_s
   gtoken_s *next;
 };
 
-struct vrec_s
-{
-  edge_s *edge;
-  union {
-    uint16_t isoccupied;
-    vrec_s *next;
-  };
-};
-
-struct vhash_s
-{
-  uint16_t size;
-  vrec_s table[_VHTABLESIZE];
-};
-
-struct vchain_s
-{
-  uint8_t mem;
-  vrecord_s chunk[_CHUNK_SIZE];
-  vchain_s *next;
-};
-
 struct vertex_s
 {
   unsigned char name[_MAXLEXLEN + 1];
   uint16_t nedges;
   edge_s **edges;
-  vhash_s etable;
 };
 
 struct edge_s
@@ -105,18 +82,12 @@ struct edge_s
   vertex_s *v2;
 };
 
-
-struct wmap_s
-{
-  float map[_MAPNODE_SIZE][256];
-  wmap_s *next;
-};
-
 extern gtoken_s *lex_ (unsigned char *buf);
 extern void freetokens (gtoken_s *list);
 
 /*graph data structure routines*/
 extern wgraph_s *gparse (const unsigned char *file);
+
 extern void printgraph (wgraph_s *g);
 
 #endif

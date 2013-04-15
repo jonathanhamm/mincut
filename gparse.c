@@ -5,8 +5,6 @@
 
 static gtoken_s *stream_;
 
-wmap_s wmap_;
-
 /*reads file into a buffer*/
 static unsigned char *read_gfile(const char *fname);
 static void tablegen (void);
@@ -26,7 +24,6 @@ static void e_ (wgraph_s *g);
 /*graph data structure routines*/
 static inline wgraph_s *wgraph_s_ (void);
 static vertex_s *vertex_s_ (gtoken_s *tok);
-static int etableinsert (vertex_s *v1, edge_s *edge);
 static int addedge (vertex_s *v, edge_s *e);
 static edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
 static int insert_vertex (wgraph_s *graph, vertex_s *v);
@@ -47,7 +44,6 @@ wgraph_s *gparse (const unsigned char *file)
   g = parse_();
   if (!g)
     return NULL;
-  printgraph (g);
   return g;
 }
 
@@ -60,8 +56,8 @@ unsigned char *read_gfile (const char *fname)
   
   f = fopen(fname,"r");
   if(!f) {
-    printf("Error Opening: %s\n",fname);
-    return NULL;
+    perror("Error Opening File");
+    exit(EXIT_FAILURE);
   }
   buf = malloc(_INITBUFSIZE);
   if (!buf)
@@ -159,6 +155,8 @@ gtoken_s *lex_ (unsigned char *buf)
   curr = gtoken_s_ (curr, "$", _EOF);
   return stream_;
 err_:
+  freetokens (stream_);
+  stream_ = NULL;
   return NULL;
 }
 
@@ -318,33 +316,6 @@ int addedge (vertex_s *v, edge_s *e)
   return 1;
 }
 
-
-int etableinsert (vertex_s *v1, edge_s *edge)
-{
-  uint8_t index;
-  vrec_s *vrec;
-  
-  vrec = &v1->etable.table[((uint64_t)edge->v2) % _VHTABLESIZE];
-  if (!vrec->isoccupied) {
-    vrec->edge = edge;
-    vrec->isoccupied = 1;
-  }
-  else {
-    if (vrec->isoccupied != 1) {
-      while (vrec->next)
-        vrec = vrec->next;
-    }
-    vrec->next = malloc(sizeof(*vrec));
-    vrec = vrec->next;
-    if (!vrec)
-      return -1;
-    vrec->edge = edge;
-    vrec->next = NULL;
-  }
-  v1->etable.size++;
-  return 1;
-}
-
 edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
 {
   edge_s *edge;
@@ -358,8 +329,6 @@ edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
   edge->v1 = v1;
   edge->v2 = v2;
   edge->weight = weight;
-  etableinsert (v1, edge);
-  etableinsert (v2, edge);
   return edge;
 }
 
@@ -400,8 +369,6 @@ vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
 {
   uint16_t i;
   uint8_t it;
-  vrecord_s *rec;
-  vchain_s *iterator;
   /*
   rec = &graph->vtable[*(uint64_t *)key % _VTABLE_SIZE];
   if (!__IDCMP(key,rec->v->name)) {
@@ -424,17 +391,6 @@ vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
   return NULL;
 }
 
-vchain_s *vchain_s_ (void)
-{
-  vchain_s *c;
-  
-  c = calloc(1,sizeof(*c));
-  if (!c)
-    return NULL;
-  c->mem = ~c->mem;
-  return c;
-}
-
 void printbyte (uint8_t b)
 {
   uint8_t i;
@@ -442,10 +398,4 @@ void printbyte (uint8_t b)
   for (i = 0; i < 8; i++)
     printf("%d",((b << i) & 0x80)>>7);
   printf("\n");
-}
-
-
-void printgraph (wgraph_s *g)
-{
-
 }

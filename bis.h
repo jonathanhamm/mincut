@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <time.h>
 
-#define _INITMUTATIONPROB 30
-#define _POOLSIZE 50
+#define _INITMUTATIONPROB 5
+#define _POOLSIZE 25
 #define _GET_CHRBYSIZE(pool) ((pool->chromsize / 8) + \
                                   (pool->chromsize % 8 != 0))
 #define _GET_CHBITLEN(pool) (pool->bitlen)
@@ -54,12 +54,12 @@ extern void printweights (pool_s *p);
 
 /* Crossover Functions */
 extern void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2);
-extern void mask_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2);
+extern void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2);
 
 
 /* Mutation Functions */
 extern void mutate1 (pool_s *p, uint64_t *victim);
 extern void mutate2 (pool_s *p, uint64_t *victim);
 
-
+extern void buildgraph (pool_s *p);
 #endif

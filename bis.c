@@ -27,7 +27,7 @@ static pool_s *pool_init (wgraph_s *g);
 
 static void sigdummy (int signal);
 static void siginthandle(int signal);
-static void sigquithandle (int signal);
+static void sigmutatehandle (int signal);
 
 static pool_s *pool_s_ (uint16_t csize);
 static void printlword (uint64_t lword, uint8_t mask);
@@ -66,7 +66,7 @@ pool_s *pool_s_ (uint16_t csize)
     for (i = 0; i < pool->remain; i++)
         pool->cmask |= (1llu << i);
   }
-  pool->cross = mask_cr;
+  pool->cross = uniform_cr;
   pool->mutate = mutate1;
   printf("QWORD size: %d\n", pool->chromsize);
   printf("Remainder: %d\nMask\n", pool->remain);
@@ -312,9 +312,9 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
  
  f = (~mask & p1) | p2
  
- Masking Crossover
+ Uniform Crossover
 */
-void mask_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
+void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
 {
   uint16_t i;
   uint64_t  *mask,  *backup,
@@ -382,19 +382,14 @@ void mutate2 (pool_s *p, uint64_t *victim)
 
 #define CBUF_SIZE 32
 
-void sigfloathandle (int signal)
-{
-  printf("\n%d\n",pool_->accum);
-}
-
 int run_ge (wgraph_s *g)
 {
   pid_t pid;
   pool_s *p;
+  int tmp;
   uint16_t n, index;
   float i1, i2;
   unsigned char cbuf[CBUF_SIZE];
-  gtoken_s *head, *tokens;
   
   if (signal(SIGINT, sigdummy) == SIG_ERR)
     return -1;
@@ -402,8 +397,8 @@ int run_ge (wgraph_s *g)
   p = pool_init (g);
   if (!p)
     return -1;
-  pipe (pipe_);
-
+  if (pipe (pipe_) == -1)
+    return -1;
   pid = fork();
   if (pid) {
     cbuf[CBUF_SIZE-1] = _UEOF;
@@ -412,53 +407,17 @@ int run_ge (wgraph_s *g)
       while ((cbuf[index] = (char)getchar()) != '\n') {
         if (index < CBUF_SIZE-1)
           ++index;
+        else
+          printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
       }
       cbuf[index] = _UEOF;
-      head = lex_ (cbuf);
-      tokens = head;
-      if (!strcmp(tokens->lexeme, "new")) {
-        printf("Migrating: %d\n", getpid());
-        tokens = tokens->next;
-        if (!strcmp (tokens->lexeme, "singlepoint"));
-          //p->cross = singlepoint_cr;
-      }
-      else if (!strcmp(tokens->lexeme, "status")) {
-        kill (pid, SIGINT);
-      }
-      else if (!strcmp(tokens->lexeme, "mutate")) {
-        tokens = tokens->next;
-        if (tokens->type == _NUM) {
-          
-        }
-        else
-          printf ("Expected Number, but got: %s\n", tokens->lexeme);
-      }
-      else if (!(
-                  strcmp(tokens->lexeme, "exit")  &&
-                  strcmp(tokens->lexeme, "Q")     &&
-                  strcmp(tokens->lexeme, "q")     &&
-                  strcmp(tokens->lexeme, "quit")
-                )
-      )
-      {
-        printf("Final:\n");
-        kill(pid, SIGINT);
-        pause();
-        kill(pid, SIGQUIT);
-        exit(EXIT_SUCCESS);
-      }
-      else {
-        printf("'%s' not recognized.\n",tokens->lexeme);
-      }
-      freetokens (head);
+      write(pipe_[1], cbuf, CBUF_SIZE);
+      kill (pid, SIGINT);
+      pause();
     }
   }
   else {
     if (signal(SIGINT, siginthandle) == SIG_ERR)
-      return -1;
-    if (signal(SIGQUIT, sigquithandle) == SIG_ERR)
-      return -1;
-    if (signal(SIGFPE, sigfloathandle) == SIG_ERR)
       return -1;
     n = p->chromsize;
     p->start = clock();
@@ -475,23 +434,114 @@ int run_ge (wgraph_s *g)
   return 0;
 }
 
-void siginthandle (int signal)
+void printstatus (void)
 {
   printf("Status at Generation: %llu\n", pool_->gen);
   printpool(pool_);
   printf("\nMost Fit ( weight = %f ):\n", pool_->rbuf[_POOLSIZE-1].fitness);
   printchrom (pool_, pool_->rbuf[_POOLSIZE-1].ptr);
   if (isfeasible(pool_, pool_->rbuf[_POOLSIZE-1].ptr))
-      printf("\nIs Feasible\n");
+    printf("\nIs Feasible\n");
   else
     printf("\nNot Feasible\n");
   printf("Time Elapse: %d\n", (int)(clock() - pool_->start));
+
+}
+
+void siginthandle (int signal)
+{
+  int tmpint;
+  unsigned char cbuf[CBUF_SIZE];
+  gtoken_s *head, *tokens;
+  
+  read(pipe_[0], &cbuf, CBUF_SIZE);
+  head = lex_ (cbuf);
+  tokens = head;
+  if (!tokens) {
+    printf ("Illegal Symbols Used\n");
+    goto exit_;
+  }
+  else if (!strcmp(tokens->lexeme, "status")) {
+    printstatus ();
+  }
+  else if (!strcmp(tokens->lexeme, "set")) {
+    tokens = tokens->next;
+    if (!strcmp(tokens->lexeme, "mutate")) {
+      tokens = tokens->next;
+      if (!strcmp(tokens->lexeme, "prob")) {
+        tokens = tokens->next;
+        if (tokens->type == _NUM) {
+          tmpint = atoi (tokens->lexeme);
+          if (tmpint > 100)
+            tmpint = 100;
+          else if (tmpint < 0)
+            tmpint = 0;
+          printf("Mutation Probability Set at: %d%%\n", tmpint);
+          pool_->mutateprob = tmpint;
+        }
+      }
+      else if (!strcmp(tokens->lexeme, "function")) {
+        tokens = tokens->next;
+        if (tokens->type == _NUM) {
+          tmpint = atoi (tokens->lexeme);
+          if (tmpint == 1) {
+            printf ("Set to Mutate Function 1\n");
+            pool_->mutate = mutate1;
+          }
+          else if (tmpint == 2) {
+            printf ("Set to Mutate Function 2\n");
+            pool_->mutate = mutate2;
+          }
+          else
+            printf ("Expected 1 or 2, but got %s\n", tokens->lexeme);
+        }
+        else 
+          printf ("Expected Number, but got %s\n", tokens->lexeme);
+      }
+    }
+  }
+  else if (!strcmp(tokens->lexeme, "get")) {
+    tokens = tokens->next;
+    if (!strcmp(tokens->lexeme, "mutate")) {
+      tokens = tokens->next;
+      if (!strcmp(tokens->lexeme, "prob"))
+        printf ("Mutation Probability: %d\n", pool_->mutateprob);
+      else
+        printf ("Expected 'probability' or 'operator', but got %s", tokens->lexeme);
+    }
+    else
+      printf ("Expected Attribute Name, but got: %s\n", tokens->lexeme);
+  }
+  else if (!(
+             strcmp(tokens->lexeme, "exit")  &&
+             strcmp(tokens->lexeme, "Q")     &&
+             strcmp(tokens->lexeme, "q")     &&
+             strcmp(tokens->lexeme, "quit")
+             )
+           )
+  {
+    printf("Final:\n");
+    printstatus ();
+    kill(getppid(), SIGQUIT);
+    exit(EXIT_SUCCESS);
+  }
+  else {
+    printf("'%s' not recognized.\n",tokens->lexeme);
+  }
+  
+exit_:
+  freetokens (head);
   kill(getppid(), SIGINT);
 }
 
-void sigquithandle (int signal)
+void sigdummy (int signal){}
+
+void printsolution (pool_s *p, int index)
 {
-  exit(EXIT_SUCCESS);
+  
 }
 
-void sigdummy (int signal){}
+inline void printfittest (pool_s *p)
+{
+  printsolution (p, _POOLSIZE-1);
+}
