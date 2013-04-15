@@ -26,6 +26,7 @@ static void e_ (wgraph_s *g);
 /*graph data structure routines*/
 static inline wgraph_s *wgraph_s_ (void);
 static vertex_s *vertex_s_ (gtoken_s *tok);
+static int etableinsert (vertex_s *v1, edge_s *edge);
 static int addedge (vertex_s *v, edge_s *e);
 static edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
 static int insert_vertex (wgraph_s *graph, vertex_s *v);
@@ -253,10 +254,8 @@ void pedgelist_ (wgraph_s *g)
 
 void pedgeparam_ (wgraph_s *g)
 {
-  if (__GTNEXT()->type == _COMMA) {
+  while (__GTNEXT()->type == _COMMA)
     e_(g);
-    pedgeparam_(g);
-  }
 }
 
 void e_ (wgraph_s *g)
@@ -319,11 +318,38 @@ int addedge (vertex_s *v, edge_s *e)
   return 1;
 }
 
+
+int etableinsert (vertex_s *v1, edge_s *edge)
+{
+  uint8_t index;
+  vrec_s *vrec;
+  
+  vrec = &v1->etable.table[((uint64_t)edge->v2) % _VHTABLESIZE];
+  if (!vrec->isoccupied) {
+    vrec->edge = edge;
+    vrec->isoccupied = 1;
+  }
+  else {
+    if (vrec->isoccupied != 1) {
+      while (vrec->next)
+        vrec = vrec->next;
+    }
+    vrec->next = malloc(sizeof(*vrec));
+    vrec = vrec->next;
+    if (!vrec)
+      return -1;
+    vrec->edge = edge;
+    vrec->next = NULL;
+  }
+  v1->etable.size++;
+  return 1;
+}
+
 edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
 {
   edge_s *edge;
   
-  printf("Adding edge: %s %s %f\n",v1->name,v2->name, weight);
+  //printf("Adding edge: %s %s %f\n",v1->name,v2->name, weight);
   edge = malloc(sizeof(*edge));
   if (!edge)
     return NULL;
@@ -332,6 +358,8 @@ edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
   edge->v1 = v1;
   edge->v2 = v2;
   edge->weight = weight;
+  etableinsert (v1, edge);
+  etableinsert (v2, edge);
   return edge;
 }
 

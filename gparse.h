@@ -39,7 +39,7 @@ typedef struct edge_s edge_s;
 typedef struct wmap_s wmap_s;
 
 #define _VHTABLESIZE 19
-typedef struct vhash_s vhash_;
+typedef struct vhash_s vhash_s;
 typedef struct vrec_s vrec_s;
 
 
@@ -68,6 +68,20 @@ struct gtoken_s
   gtoken_s *next;
 };
 
+struct vrec_s
+{
+  edge_s *edge;
+  union {
+    uint16_t isoccupied;
+    vrec_s *next;
+  };
+};
+
+struct vhash_s
+{
+  uint16_t size;
+  vrec_s table[_VHTABLESIZE];
+};
 
 struct vchain_s
 {
@@ -81,6 +95,7 @@ struct vertex_s
   unsigned char name[_MAXLEXLEN + 1];
   uint16_t nedges;
   edge_s **edges;
+  vhash_s etable;
 };
 
 struct edge_s
@@ -90,19 +105,6 @@ struct edge_s
   vertex_s *v2;
 };
 
-struct vrec_s
-{
-  edge_s *edge;
-  union {
-    int isoccupied;
-    vrec_s *next;
-  };
-};
-
-struct vhash_s
-{
-  edge_s *edge;
-};
 
 struct wmap_s
 {
