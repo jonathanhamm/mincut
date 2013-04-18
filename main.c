@@ -9,9 +9,9 @@ int main (int argc, char **argv)
   clock_t t;
   
   if (argc != 2) {
-    printf("Usage: %s <filename>", argv[0]);
-    return 1;
+    printf("Usage: ./ge <filename>");
+    exit (EXIT_FAILURE);
   }
   run_ge (gparse(argv[1]));
-  return 0;
+  exit (EXIT_SUCCESS);
 }

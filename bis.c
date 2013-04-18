@@ -23,14 +23,12 @@
 + (((lw & 0xfff000) >> 12) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f \
 + ((lw >> 24) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f
 
-static pool_s *pool_init (wgraph_s *g);
-
 /* Signal Handlers */
 static void sigNOP (int signal) {}
 static void cSIGUSR1 (int signal);
 static void pSIGINT (int signal);
 
-static pool_s *pool_s_ (uint16_t csize);
+static pool_s *pool_s_ (wgraph_s *g);
 static void printqword (uint64_t lword, uint8_t mask);
 static float sumweights (pool_s *p, uint64_t *chrom);
 static float getfitness (pool_s *p, uint64_t *chrom);
@@ -51,18 +49,22 @@ int prcmp (roulette_s *a, roulette_s *b)
   return 0;
 }
 
-pool_s *pool_s_ (uint16_t csize)
+pool_s *pool_s_ (wgraph_s *g)
 {
-  int i;
   pool_s *p;
+  uint16_t  i, j;
+  uint64_t  *ptr;
+  float sum;
   
-  p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(csize) * 8);
-  if (!p)
-    return NULL;
+  p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(g->nvert) * 8);
+  if (!p) {
+    perror ("Malloc Error");
+    exit (EXIT_FAILURE);
+  }
   pool_ = p;
-  p->chromsize = (csize / 64) + (csize % 64 != 0);
-  p->remain = csize % 64;
-  if (!(csize % 64) && csize)
+  p->chromsize = (g->nvert / 64) + (g->nvert % 64 != 0);
+  p->remain = g->nvert % 64;
+  if (!(g->nvert % 64) && g->nvert)
     p->cmask = 0xffffffffffffffffllu;
   else {
     for (i = 0; i < p->remain; i++)
@@ -71,23 +73,6 @@ pool_s *pool_s_ (uint16_t csize)
   p->select = roulette_sf;
   p->cross = uniform_cr;
   p->mutate = mutate1;
-  printf("QWORD size: %d\n", p->chromsize);
-  printf("Remainder: %d\nMask\n", p->remain);
-  printqword(p->cmask, 64);
-  printf ("\n");
-  return p;
-}
-
-pool_s *pool_init (wgraph_s *g)
-{
-  uint16_t  i, j;
-  pool_s    *p;
-  uint64_t  *ptr;
-  float sum;
-  
-  p = pool_s_(g->nvert);
-  if (!p)
-    return NULL;
   p->gen = 0;
   ptr = p->popul;
   for (i = 0; i < POOLSIZE; i++) {
@@ -97,7 +82,7 @@ pool_s *pool_init (wgraph_s *g)
       ((uint16_t *)ptr)[2] = (uint16_t)rand();
       ((uint16_t *)ptr)[3] = (uint16_t)rand();
     }
-     *(ptr-1) &= p->cmask;
+    *(ptr-1) &= p->cmask;
   }
   p->graph = g;
   p->mutateprob = INITMUTATIONPROB;
@@ -418,7 +403,7 @@ void mutate2 (pool_s *p, uint64_t *victim)
   
   for (i = 0; i < 10; i++) {
     index = rand() % GET_CHBITLEN(p);
-    victim[index / 64] ^= (1llu << (index ));
+    victim[index / 64] ^= (1llu << (index % 64));
   }
 }
 
@@ -435,7 +420,7 @@ int run_ge (wgraph_s *g)
   if (signal(SIGALRM, sigNOP) == SIG_ERR)
     THROW_EXCEPTION();
   memset (cbuf, 0, sizeof(cbuf));
-  p = pool_init (g);
+  p = pool_s_ (g);
   if (!p)
     THROW_EXCEPTION();
   if (pipe (pipe_) == -1)
@@ -476,7 +461,7 @@ int run_ge (wgraph_s *g)
   
 exception_:
   perror("Failed Setting Program Initialization");
-  return -1;
+  exit (EXIT_FAILURE);
 }
 
 void printstatus (void)
@@ -508,7 +493,6 @@ void cSIGUSR1 (int signal)
   unsigned char cbuf[CBUF_SIZE];
   gtoken_s *head, *tokens;
   
-  printf("called\n");
   read(pipe_[0], cbuf, CBUF_SIZE);
   head = lex_ (cbuf);
   tokens = head;
@@ -592,6 +576,7 @@ void cSIGUSR1 (int signal)
     printf("'%s' not recognized.\n",tokens->lexeme);
   }
   freetokens (head);
+  
 exit_:
   kill(getppid(), SIGALRM);
 }

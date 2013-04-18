@@ -47,7 +47,6 @@ struct selected_s
   ppair_s couples[NSELECT];
 };
 
-
 struct pool_s
 {
   uint64_t gen;       /*generation number*/

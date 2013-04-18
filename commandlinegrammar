@@ -1,0 +1,10 @@
+<cparse>=>
+	status | exit | quit | q | Q | <set> | <get> | <show>
+<set>=>
+	set <set1>
+<set'>=>
+	mutate <mutate>
+	|
+	op <op>
+
+<mutate>=>
