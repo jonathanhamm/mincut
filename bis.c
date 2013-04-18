@@ -37,6 +37,7 @@ static void computeprob (pool_s *p);
 static int isfeasible (pool_s *p, uint64_t *chrom);
 static void printchrom (pool_s *p, uint64_t *chrom);
 
+static pid_t pid_;
 static int pipe_[2];
 static pool_s *pool_;
 
@@ -52,27 +53,28 @@ int prcmp (roulette_s *a, roulette_s *b)
 pool_s *pool_s_ (uint16_t csize)
 {
   int i;
-  pool_s *pool;
+  pool_s *p;
   
-  pool = calloc(1, sizeof(*pool) + _POOLSIZE*_CQWORDSIZE(csize)*8);
-  if (!pool)
+  p = calloc(1, sizeof(*p) + _POOLSIZE*_CQWORDSIZE(csize)*8);
+  if (!p)
     goto err_;
-  pool_ = pool;
-  pool->chromsize = (csize / 64) + (csize % 64 != 0);
-  pool->remain = csize % 64;
+  pool_ = p;
+  p->chromsize = (csize / 64) + (csize % 64 != 0);
+  p->remain = csize % 64;
   if (!(csize % 64) && csize)
-    pool->cmask = 0xffffffffffffffffllu;
+    p->cmask = 0xffffffffffffffffllu;
   else {
-    for (i = 0; i < pool->remain; i++)
-        pool->cmask |= (1llu << i);
+    for (i = 0; i < p->remain; i++)
+        p->cmask |= (1llu << i);
   }
-  pool->cross = uniform_cr;
-  pool->mutate = mutate1;
-  printf("QWORD size: %d\n", pool->chromsize);
-  printf("Remainder: %d\nMask\n", pool->remain);
-  printlword(pool->cmask, 64);
+  p->select = roulette_sf;
+  p->cross = uniform_cr;
+  p->mutate = mutate1;
+  printf("QWORD size: %d\n", p->chromsize);
+  printf("Remainder: %d\nMask\n", p->remain);
+  printlword(p->cmask, 64);
   printf ("\n");
-  return pool;
+  return p;
   
 err_:
   return NULL;
@@ -99,15 +101,9 @@ pool_s *pool_init (wgraph_s *g)
     }
      *(ptr-1) &= p->cmask;
   }
-  p->crbackup = malloc(p->chromsize * sizeof(uint64_t));
-  if (!p->crbackup)
-    return NULL;
-  p->crmask = malloc (p->chromsize * sizeof(uint64_t));
-  if (!p->crmask)
-    return NULL;
   p->graph = g;
   p->mutateprob = _INITMUTATIONPROB;
-  p->bitlen = ((p->remain) ? ((p->chromsize << 6) - (64 - p->remain)) : p->chromsize*64);  
+  p->bitlen = ((p->remain) ? ((p->chromsize * 64) - (64 - p->remain)) : p->chromsize*64);
   for (sum = 0, ptr = p->popul, i = 0; i < _POOLSIZE; i++, ptr += p->chromsize) {
     p->rbuf[i].fitness = getfitness (p, ptr);
     p->rbuf[i].ptr = ptr;
@@ -115,9 +111,15 @@ pool_s *pool_init (wgraph_s *g)
   }
   for (i = 0, p->accum = 0; i < _POOLSIZE; i++) {
     p->rbuf[i].prob = sum / p->rbuf[i].fitness;
-    p->accum += p->rbuf[i].fitness;
   }
   qsort (p->rbuf, _POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
+  for (i = 0; i < _POOLSIZE; i++) {
+    p->accum += p->rbuf[i].prob;
+    p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
+    if (i)
+      p->rbuf[i].cummulative += p->rbuf[i-1].cummulative;
+  }
+  p->fitsum = sum;
   return p;
 }
 
@@ -160,6 +162,38 @@ void printpool (pool_s *p)
   }
 }
 
+int bsearch_r (roulette_s *roul, uint32_t key)
+{
+	int mid, low, high;
+
+  low = 0;
+  high = _POOLSIZE-1;
+  for (mid = low+(high-low)/2; high >= low; mid = low+(high-low)/2) {
+    if (key < roul[mid].cummulative)
+      high = mid - 1;
+    else if (key > roul[mid].cummulative)
+      low = mid + 1;
+    else
+      return mid;
+  }
+  return mid;
+}
+
+void roulette_sf (pool_s *p, selected_s *parents)
+{
+  int i;
+  uint32_t i1, i2;
+  
+  for (i = 0; i < _NSELECT; i++) {
+    i1 = bsearch_r (p->rbuf, rand() % p->accum);
+    i2 = bsearch_r (p->rbuf, rand() % p->accum);
+    if (i2 == i1)
+      i2 = (i2 - 1) % _POOLSIZE;
+    parents->couples[i].p1 = &p->rbuf[i1];
+    parents->couples[i].p2 = &p->rbuf[i2];
+  }
+}
+
 int countdigits (pool_s *p, uint64_t *cptr)
 {
   int i, count, n;
@@ -182,13 +216,9 @@ int iscut(pool_s *p, uint64_t *chrom, vertex_s *v)
   
   nvert = p->graph->nvert;
   vtable = p->graph->vtable;
-  for (i = 0; i < nvert; i++) {
-    if (vtable[i] == v) {
-      if (!(chrom[i / 64] & (1llu << (i % 64))))
-        return 1;
-      return 0;
-    }
-  }
+  i = vgetindex (v);
+  if ((~chrom[i / 64] & (1llu << (i % 64))))
+    return 1;
   return 0;
 }
 
@@ -201,13 +231,13 @@ float sumweights (pool_s *p, uint64_t *chrom)
   vertex_s *v;
   edge_s **edges;
   float weight;
-  
+
   for (weight = 0, i = 0, ptr = chrom; i < p->chromsize; i++, ptr++) {
     if (i == p->chromsize-1 && p->remain)
       csize = p->remain;
     else
-      csize = 64;
-    for (iter = *ptr, pos = 0; pos <= csize; iter &= ~(1llu << pos)) {
+      csize = 63;
+    for (iter = *ptr, pos = 0; pos < csize; iter &= ~(1llu << pos)) {
       pos = ffsl(iter);
       if (!pos)
         break;
@@ -216,7 +246,7 @@ float sumweights (pool_s *p, uint64_t *chrom)
       nedges = v->nedges;
       edges = v->edges;
       for (j = 0; j < nedges; j++) {
-        if (iscut(p,ptr, (edges[j]->v1 == v) ? edges[j]->v2 : edges[j]->v1))
+        if (iscut(p, ptr, (edges[j]->v1 == v) ? edges[j]->v2 : edges[j]->v1))
           weight += edges[j]->weight;
       }
     }
@@ -243,7 +273,7 @@ float getfitness (pool_s *p, uint64_t *chrom)
   
   setcount = countdigits (p, chrom);
   differ = abs(2*setcount-_GET_CHBITLEN(p));
-  return sumweights (p, chrom) + (differ<<(3*p->chromsize));
+  return sumweights (p, chrom) + (differ << 4);
 }
 
 void computeprob (pool_s *p)
@@ -252,15 +282,18 @@ void computeprob (pool_s *p)
   uint64_t *ptr;
   float sum, fc1, fc2;
   
-  for (sum = 0, i = 0; i < _POOLSIZE; i++)
-    sum += p->rbuf[i].fitness;
-  for (i = 0, p->accum = 0; i < _POOLSIZE; i++) {
+  sum = p->fitsum;
+  for (i = 0, p->accum = 0; i < _POOLSIZE; i++)
     p->rbuf[i].prob = sum / p->rbuf[i].fitness;
-    p->accum += p->rbuf[i].fitness;
-    if (p->rbuf[i].fitness < 0)
-      for(;;)printf("derp\n");
-  }
   qsort (p->rbuf, _POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
+  for (i = 0; i < _POOLSIZE; i++) {
+    p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
+    if (i)
+      p->rbuf[i].cummulative += p->rbuf[i-1].cummulative;
+    p->accum += p->rbuf[i].prob;
+  }
+  if (isfeasible(p, p->rbuf[_POOLSIZE-1].ptr))
+    p->bestfeasible = p->rbuf[_POOLSIZE-1].ptr;
 }
 
 int isfeasible (pool_s *p, uint64_t *chrom)
@@ -317,19 +350,19 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
 void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
 {
   uint16_t i;
-  uint64_t  *mask,  *backup,
+  uint64_t  mask,  backup,
             *dst1,  *dst2,
             *p1,    *p2;
   
   p1 = rp1->ptr;
   p2 = rp2->ptr;
-  if (rp1 == &p->rbuf[_POOLSIZE-1]) {
+  if (rp1->ptr == p->bestfeasible) {
     rp1 = &p->rbuf[0];
     dst1 = rp1->ptr;
   }
   else
     dst1 = p1;
-  if (rp2 == &p->rbuf[_POOLSIZE-1]) {
+  if (rp2->ptr == p->bestfeasible) {
     rp2 = &p->rbuf[0];
     dst2 = rp2->ptr;
   }
@@ -339,35 +372,37 @@ void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
     rp2 = &p->rbuf[1%_POOLSIZE];
     dst2 = rp2->ptr;
   }
-  mask = p->crmask;
-  backup = p->crbackup;
+  p->fitsum -= (rp1->fitness + rp2->fitness);
   for (i = 0; i < p->chromsize; i++) {
-    ((uint16_t *)mask)[0] = (uint16_t)rand();
-    ((uint16_t *)mask)[1] = (uint16_t)rand();
-    ((uint16_t *)mask)[2] = (uint16_t)rand();
-    ((uint16_t *)mask)[3] = (uint16_t)rand();
-    backup[i] = p1[i];
-    dst1[i] = (~mask[i] & backup[i]) | (mask[i] & p2[i]);
-    dst2[i] = (mask[i] & backup[i]) | (~mask[i] & p2[i]);
+    ((uint16_t *)&mask)[0] = (uint16_t)rand();
+    ((uint16_t *)&mask)[1] = (uint16_t)rand();
+    ((uint16_t *)&mask)[2] = (uint16_t)rand();
+    ((uint16_t *)&mask)[3] = (uint16_t)rand();
+    backup = p1[i];
+    dst1[i] = (~mask & backup) | (mask & p2[i]);
+    dst2[i] = (mask & backup) | (~mask & p2[i]);
   }
-  dst1[i-1] &= p->cmask;
-  dst2[i-1] &= p->cmask;
   if (rand() % 100 < p->mutateprob) {
     p->mutate (p, dst1);
     p->mutate (p, dst2);
   }
   rp1->fitness = getfitness (p, dst1);
   rp2->fitness = getfitness (p, dst2);
+  p->fitsum += (rp1->fitness + rp2->fitness);
 }
 
 void mutate1 (pool_s *p, uint64_t *victim)
 {
+  int i, n;
   uint16_t index;
   
-  index = rand() % _GET_CHBITLEN(p);
-  victim[index / 64] ^= (1llu << index);
-  index = rand() % _GET_CHBITLEN(p);
-  victim[index / 64] ^= (1llu << index);
+  n = _GET_CHBITLEN(p) >> 4;
+  if (!isfeasible(p, victim))
+    ++n;
+  for (i = 0; i < n; i++) {
+    index = rand() % _GET_CHBITLEN(p);
+    victim[index / 64] ^= (1llu << (index % 64));
+  }
 }
 
 void mutate2 (pool_s *p, uint64_t *victim)
@@ -376,22 +411,26 @@ void mutate2 (pool_s *p, uint64_t *victim)
   
   for (i = 0; i < 10; i++) {
     index = rand() % _GET_CHBITLEN(p);
-    victim[index / 64] ^= (1llu << index);
+    victim[index / 64] ^= (1llu << (index ));
   }
 }
 
 #define CBUF_SIZE 32
 
+
+void pSIGALRM (int signal) {}
+
 int run_ge (wgraph_s *g)
 {
-  pid_t pid;
   pool_s *p;
-  int tmp;
+  int i;
   uint16_t n, index;
-  float i1, i2;
+  selected_s parents;
   unsigned char cbuf[CBUF_SIZE];
   
   if (signal(SIGINT, sigdummy) == SIG_ERR)
+    return -1;
+  if (signal(SIGALRM, pSIGALRM) == SIG_ERR)
     return -1;
   memset (cbuf, 0, sizeof(cbuf));
   p = pool_init (g);
@@ -399,8 +438,8 @@ int run_ge (wgraph_s *g)
     return -1;
   if (pipe (pipe_) == -1)
     return -1;
-  pid = fork();
-  if (pid) {
+  pid_ = fork();
+  if (pid_) {
     cbuf[CBUF_SIZE-1] = _UEOF;
     while (1) {
       index = 0;
@@ -412,21 +451,21 @@ int run_ge (wgraph_s *g)
       }
       cbuf[index] = _UEOF;
       write(pipe_[1], cbuf, CBUF_SIZE);
-      kill (pid, SIGINT);
-      pause();
+      kill (pid_, SIGUSR1);
+      pause ();
     }
   }
   else {
-    if (signal(SIGINT, siginthandle) == SIG_ERR)
+    if (signal(SIGUSR1, siginthandle) == SIG_ERR)
+      return -1;
+    if (signal(SIGINT, pSIGALRM) == SIG_ERR)
       return -1;
     n = p->chromsize;
     p->start = clock();
     while (1) {
-      i1 = (float)(rand()%p->accum);
-      i2 = (float)(rand()%p->accum);
-      i1 = _POOLSIZE * i1/p->accum;
-      i2 = _POOLSIZE * i2/p->accum;
-      p->cross (p, &p->rbuf[(int)i1], &p->rbuf[(int)i2]);
+      p->select (p, &parents);
+      for (i = 0; i < _NSELECT; i++)
+        p->cross (p, parents.couples[i].p1, parents.couples[i].p2);
       computeprob(p);
       ++p->gen;
     }
@@ -436,15 +475,24 @@ int run_ge (wgraph_s *g)
 
 void printstatus (void)
 {
+  int i;
+  
   printf("Status at Generation: %llu\n", pool_->gen);
   printpool(pool_);
   printf("\nMost Fit ( weight = %f ):\n", pool_->rbuf[_POOLSIZE-1].fitness);
   printchrom (pool_, pool_->rbuf[_POOLSIZE-1].ptr);
   if (isfeasible(pool_, pool_->rbuf[_POOLSIZE-1].ptr))
     printf("\nIs Feasible\n");
-  else
+  else {
     printf("\nNot Feasible\n");
-  printf("Time Elapse: %d\n", (int)(clock() - pool_->start));
+    if (pool_->bestfeasible) {
+      printf("\nMost Fit Feasible ( weight = %f ):\n", getfitness(pool_, pool_->bestfeasible));
+          printchrom (pool_, pool_->rbuf[i].ptr);
+    }
+    else
+      printf("No Feasibles Found\n");
+  }
+  printf("Time Elapse: %llu\n", (uint64_t)(clock() - pool_->start));
 
 }
 
@@ -454,7 +502,8 @@ void siginthandle (int signal)
   unsigned char cbuf[CBUF_SIZE];
   gtoken_s *head, *tokens;
   
-  read(pipe_[0], &cbuf, CBUF_SIZE);
+  printf("called\n");
+  read(pipe_[0], cbuf, CBUF_SIZE);
   head = lex_ (cbuf);
   tokens = head;
   if (!tokens) {
@@ -480,7 +529,7 @@ void siginthandle (int signal)
           pool_->mutateprob = tmpint;
         }
       }
-      else if (!strcmp(tokens->lexeme, "function")) {
+      else if (!strcmp(tokens->lexeme, "op")) {
         tokens = tokens->next;
         if (tokens->type == _NUM) {
           tmpint = atoi (tokens->lexeme);
@@ -498,6 +547,8 @@ void siginthandle (int signal)
         else 
           printf ("Expected Number, but got %s\n", tokens->lexeme);
       }
+      else
+        printf ("Expected 'op' or 'prob' but got %s\n", tokens->lexeme);
     }
   }
   else if (!strcmp(tokens->lexeme, "get")) {
@@ -505,9 +556,15 @@ void siginthandle (int signal)
     if (!strcmp(tokens->lexeme, "mutate")) {
       tokens = tokens->next;
       if (!strcmp(tokens->lexeme, "prob"))
-        printf ("Mutation Probability: %d\n", pool_->mutateprob);
+        printf ("Mutation Probability: %d%%\n", pool_->mutateprob);
+      else if (!strcmp(tokens->lexeme, "op")) {
+        if (pool_->mutate == mutate1)
+          printf("Mutation Operator 1\n");
+        else
+          printf("Mutation Operator 2\n");
+      }
       else
-        printf ("Expected 'probability' or 'operator', but got %s", tokens->lexeme);
+        printf ("Expected 'probability' or 'operator', but got %s\n", tokens->lexeme);
     }
     else
       printf ("Expected Attribute Name, but got: %s\n", tokens->lexeme);
@@ -531,10 +588,19 @@ void siginthandle (int signal)
   
 exit_:
   freetokens (head);
-  kill(getppid(), SIGINT);
+  kill(getppid(), SIGALRM);
 }
 
-void sigdummy (int signal){}
+void sigdummy (int signal)
+{
+  unsigned char cbuf[CBUF_SIZE];
+  
+  strcpy(cbuf, "status");
+  cbuf[6] = _UEOF;
+  write(pipe_[1], cbuf, CBUF_SIZE);
+  kill (pid_, SIGUSR1);
+  pause();
+}
 
 void printsolution (pool_s *p, int index)
 {

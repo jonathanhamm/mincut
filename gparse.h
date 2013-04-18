@@ -32,25 +32,12 @@
 typedef struct gnode_s gnode_s;
 typedef struct wgraph_s wgraph_s;
 typedef struct gtoken_s gtoken_s;
-typedef struct vrecord_s vrecord_s;
 typedef struct vertex_s vertex_s;
-typedef struct vchain_s vchain_s;
 typedef struct edge_s edge_s;
-typedef struct wmap_s wmap_s;
 
-#define _VHTABLESIZE 19
+#define _VHTABLESIZE 233
 typedef struct vhash_s vhash_s;
 typedef struct vrec_s vrec_s;
-
-
-struct vrecord_s
-{
-  vertex_s *v;
-  union {
-    unsigned long isoccupied;
-    vchain_s *chain;
-  };
-};
 
 struct wgraph_s
 {
@@ -82,11 +69,31 @@ struct edge_s
   vertex_s *v2;
 };
 
+struct vrec_s
+{
+  vertex_s *v;
+  uint16_t index;
+  union {
+    unsigned long isoccupied;
+    vrec_s *next;
+  };
+};
+
+struct vhash_s
+{
+  vrec_s table[_VHTABLESIZE];
+};
+
+extern vhash_s vhash_;
+
 extern gtoken_s *lex_ (unsigned char *buf);
 extern void freetokens (gtoken_s *list);
 
 /*graph data structure routines*/
 extern wgraph_s *gparse (const unsigned char *file);
+
+extern int vhashinsert (vertex_s *v, uint16_t index);
+extern uint16_t vgetindex (vertex_s *v);
 
 extern void printgraph (wgraph_s *g);
 

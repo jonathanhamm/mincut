@@ -4,8 +4,9 @@
 #include <stdint.h>
 #include <time.h>
 
-#define _INITMUTATIONPROB 5
-#define _POOLSIZE 25
+#define _INITMUTATIONPROB 3
+#define _POOLSIZE 100
+#define _NSELECT (_POOLSIZE / 5)
 #define _GET_CHRBYSIZE(pool) ((pool->chromsize / 8) + \
                                   (pool->chromsize % 8 != 0))
 #define _GET_CHBITLEN(pool) (pool->bitlen)
@@ -15,13 +16,29 @@ typedef struct pool_s pool_s;
 
 /*Chromosomes are Little Endian, and Packed into a 64-bit alligned buffer*/
 typedef struct roulette_s roulette_s;
+typedef struct selected_s selected_s;
+typedef struct ppair_s ppair_s;
+
 
 struct roulette_s
 {
   float prob;
   float fitness;
+  uint32_t cummulative;
   uint64_t *ptr;
 };
+
+struct ppair_s
+{
+  roulette_s *p1;
+  roulette_s *p2;
+};
+
+struct selected_s
+{
+  ppair_s couples[_NSELECT];
+};
+
 
 struct pool_s
 {
@@ -34,12 +51,13 @@ struct pool_s
   pool_s *child;
   uint8_t mutateprob;
   wgraph_s *graph;
-  uint64_t *crbackup;
-  uint64_t *crmask;
-  clock_t start;
+  uint64_t start;
+  void (*select) (pool_s *, selected_s *);
   void (*cross) (pool_s *, roulette_s *, roulette_s *);
   void (*mutate) (pool_s *, uint64_t *);
+  float fitsum;
   uint32_t accum;
+  uint64_t *bestfeasible;
   roulette_s rbuf[_POOLSIZE];
   uint64_t popul[0];
 };
@@ -51,6 +69,9 @@ extern int run_ge (wgraph_s *g);
 
 extern int countdigits(pool_s *p, uint64_t *cptr);
 extern void printweights (pool_s *p);
+
+/* Selection Functions */
+extern void roulette_sf (pool_s *p, selected_s *parents);
 
 /* Crossover Functions */
 extern void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2);

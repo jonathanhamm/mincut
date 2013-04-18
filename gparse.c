@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>  
 
+vhash_s vhash_;
 static gtoken_s *stream_;
 
 /*reads file into a buffer*/
@@ -28,8 +29,28 @@ static int addedge (vertex_s *v, edge_s *e);
 static edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
 static int insert_vertex (wgraph_s *graph, vertex_s *v);
 static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
-static vchain_s *vchain_s_ (void);
 static void printbyte (uint8_t b);
+
+int checkduplicates (wgraph_s *g, vertex_s *v1, vertex_s *v2)
+{
+  int i, j;
+  
+  for (i = 0; i < g->nvert; i++) {
+    if (g->vtable[i] == v1) {
+      for (j = 0; j < v1->nedges; j++) {
+        if (v1->edges[j]->v1 == v1) {
+          if (v1->edges[j]->v2 == v2)
+            return 1;
+        }
+        else if (v1->edges[j]->v1 == v2){
+          if (v1->edges[j]->v1 == v1)
+            return 1;
+        }
+      }
+    }
+  }
+  return 0;
+}
 
 wgraph_s *gparse (const unsigned char *file)
 {
@@ -79,6 +100,51 @@ err_:
   printf("Heap Allocation Error\n");
   fclose(f);
   return NULL;
+}
+
+int vhashinsert (vertex_s *v, uint16_t index)
+{
+  uint16_t i;
+  vrec_s *ptr;
+
+  i = (unsigned long)v % _VHTABLESIZE;
+  if (vhash_.table[i].isoccupied) {
+    ptr = malloc (sizeof(*ptr));
+    if (!ptr)
+      return -1;
+    ptr->v = v;
+    ptr->index = index;
+    if (vhash_.table[i].isoccupied == 1) {
+      ptr->next = NULL;
+      vhash_.table[i].next = ptr;
+    }
+    else {
+      ptr->next = vhash_.table[i].next;
+      vhash_.table[i].next = ptr;
+    }
+  }
+  else {
+    vhash_.table[i].v = v;
+    vhash_.table[i].index = index;
+    vhash_.table[i].isoccupied = 1;
+  }
+  return 1;
+}
+
+uint16_t vgetindex (vertex_s *v)
+{
+  uint16_t i;
+  vrec_s *ptr;
+  
+  i = (unsigned long)v % _VHTABLESIZE;
+  if (vhash_.table[i].v == v)
+    return vhash_.table[i].index;
+  else {
+    for (ptr = vhash_.table[i].next; ptr; ptr = ptr->next) {
+      if (ptr->v == v)
+        return ptr->index;
+    }
+  }
 }
 
 /*
@@ -163,6 +229,7 @@ err_:
 void freetokens (gtoken_s *list)
 {
   gtoken_s *backup;
+  
   while (list) {
     backup = list;
     list = list->next;
@@ -219,12 +286,16 @@ void pgraph_ (wgraph_s *g)
 
 void pnodelist_ (wgraph_s *g)
 {
+  vertex_s *v;
+  
   if (*(uint16_t *)stream_->lexeme == *(uint16_t *)"V") /*if(!strcmp(stream_->lexeme,"v"))*/
   if (__GTNEXT()->type == _EQU)
   if (__GTNEXT()->type == _OPENBRACE)
   if (__GTNEXT()->type == _ID) {
-      insert_vertex (g, vertex_s_(stream_));
-      pnodeparam_(g);
+    v = vertex_s_(stream_);
+    vhashinsert (v, g->nvert);
+    insert_vertex (g, v);
+    pnodeparam_(g);
   }
   if (stream_->type == _CLOSEBRACE)
     return;
@@ -232,9 +303,12 @@ void pnodelist_ (wgraph_s *g)
 
 void pnodeparam_ (wgraph_s *g)
 {
+  vertex_s *v;
   if (__GTNEXT()->type == _COMMA)
   if (__GTNEXT()->type == _ID) {
-    insert_vertex (g, vertex_s_(stream_));
+    v = vertex_s_(stream_);
+    vhashinsert (v, g->nvert);
+    insert_vertex (g, v);
     pnodeparam_(g);
   }
 }

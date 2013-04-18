@@ -42,6 +42,8 @@
 		2F73874F1716C5C40080641B /* test192 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test192; path = ../../test192; sourceTree = "<group>"; };
 		2F7387501716C6330080641B /* test150 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test150; path = ../../test150; sourceTree = "<group>"; };
 		2FC4A188171B6F3C001D8F8B /* test1024 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test1024; path = ../../test1024; sourceTree = "<group>"; };
+		2FC4A189171CF59E001D8F8B /* 10_256 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = 10_256; path = ../../10_256; sourceTree = "<group>"; };
+		2FC4A18A171D300C001D8F8B /* test98 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test98; path = ../../test98; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,6 +76,8 @@
 		2F097CC016CDF40D00856678 /* gen */ = {
 			isa = PBXGroup;
 			children = (
+				2FC4A18A171D300C001D8F8B /* test98 */,
+				2FC4A189171CF59E001D8F8B /* 10_256 */,
 				2FC4A188171B6F3C001D8F8B /* test1024 */,
 				2F7387501716C6330080641B /* test150 */,
 				2F73874F1716C5C40080641B /* test192 */,
