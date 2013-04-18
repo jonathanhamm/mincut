@@ -1,10 +1,19 @@
 <cparse>=>
-	status | exit | quit | q | Q | <set> | <get> | <show>
-<set>=>
-	set <set1>
-<set'>=>
-	mutate <mutate>
-	|
-	op <op>
-
+	status | exit | quit | q | Q 
+	| 
+	set <mutate> | get <mutate> | show <show>
 <mutate>=>
+	mutate <mutate'>
+<mutate'>=>
+	prob <prob> | op <op>
+<prob>=>
+	numreal | €
+<op>=>
+	id | €
+<show>=>
+	best <feasible>
+<feasible>=>
+	feasible | €
+	
+	
+	

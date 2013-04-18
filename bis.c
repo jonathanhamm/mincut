@@ -427,6 +427,7 @@ int run_ge (wgraph_s *g)
     THROW_EXCEPTION();
   pid_ = fork();
   if (pid_) {
+    printf ("Now running program.\n");
     cbuf[CBUF_SIZE-1] = UEOF;
     while (1) {
       index = 0;
