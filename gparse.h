@@ -3,21 +3,21 @@
 
 #include <stdint.h>
 
-#define _MAPNODE_SIZE 4
-#define _CHUNK_SIZE 8
-#define _UEOF (unsigned char)EOF
-#define _INITBUFSIZE 256
-#define _MAXLEXLEN 15
-#define _INITTSIZE 32
+#define MAPNODE_SIZE 4
+#define CHUNK_SIZE 8
+#define UEOF (unsigned char)EOF
+#define INITBUFSIZE 256
+#define MAXLEXLEN 15
+#define INITTSIZE 32
 
 /*TTYPES*/
-#define _ID         1
-#define _NUM        2
-#define _OPENBRACE  3
-#define _CLOSEBRACE 4
-#define _COMMA      5
-#define _EQU        6
-#define _EOF        7
+#define T_ID         1
+#define T_NUM        2
+#define T_OPENBRACE  3
+#define T_CLOSEBRACE 4
+#define T_COMMA      5
+#define T_EQU        6
+#define T_EOF        7
 
 #define __IDCPY(DST,SRC)    *(uint64_t *)DST = *(uint64_t *)SRC; \
 *(((uint64_t *)DST) + 1) = *(((uint64_t *)SRC) + 1)
@@ -35,7 +35,7 @@ typedef struct gtoken_s gtoken_s;
 typedef struct vertex_s vertex_s;
 typedef struct edge_s edge_s;
 
-#define _VHTABLESIZE 233
+#define VHTABLESIZE 233
 typedef struct vhash_s vhash_s;
 typedef struct vrec_s vrec_s;
 
@@ -50,14 +50,14 @@ struct wgraph_s
 struct gtoken_s
 {
   unsigned short type;
-  unsigned char lexeme[_MAXLEXLEN + 1];
+  unsigned char lexeme[MAXLEXLEN + 1];
   gtoken_s *prev;
   gtoken_s *next;
 };
 
 struct vertex_s
 {
-  unsigned char name[_MAXLEXLEN + 1];
+  unsigned char name[MAXLEXLEN + 1];
   uint16_t nedges;
   edge_s **edges;
 };
@@ -81,7 +81,7 @@ struct vrec_s
 
 struct vhash_s
 {
-  vrec_s table[_VHTABLESIZE];
+  vrec_s table[VHTABLESIZE];
 };
 
 extern vhash_s vhash_;

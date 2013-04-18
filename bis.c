@@ -25,12 +25,13 @@
 
 static pool_s *pool_init (wgraph_s *g);
 
-static void sigdummy (int signal);
-static void siginthandle(int signal);
-static void sigmutatehandle (int signal);
+/* Signal Handlers */
+static void sigNOP (int signal) {}
+static void cSIGUSR1 (int signal);
+static void pSIGINT (int signal);
 
 static pool_s *pool_s_ (uint16_t csize);
-static void printlword (uint64_t lword, uint8_t mask);
+static void printqword (uint64_t lword, uint8_t mask);
 static float sumweights (pool_s *p, uint64_t *chrom);
 static float getfitness (pool_s *p, uint64_t *chrom);
 static void computeprob (pool_s *p);
@@ -55,7 +56,7 @@ pool_s *pool_s_ (uint16_t csize)
   int i;
   pool_s *p;
   
-  p = calloc(1, sizeof(*p) + _POOLSIZE*_CQWORDSIZE(csize)*8);
+  p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(csize) * 8);
   if (!p)
     goto err_;
   pool_ = p;
@@ -72,7 +73,7 @@ pool_s *pool_s_ (uint16_t csize)
   p->mutate = mutate1;
   printf("QWORD size: %d\n", p->chromsize);
   printf("Remainder: %d\nMask\n", p->remain);
-  printlword(p->cmask, 64);
+  printqword(p->cmask, 64);
   printf ("\n");
   return p;
   
@@ -92,7 +93,7 @@ pool_s *pool_init (wgraph_s *g)
     return NULL;
   p->gen = 0;
   ptr = p->popul;
-  for (i = 0; i < _POOLSIZE; i++) {
+  for (i = 0; i < POOLSIZE; i++) {
     for (j = 0; j < p->chromsize; j++, ptr++) {
       ((uint16_t *)ptr)[0] = (uint16_t)rand();
       ((uint16_t *)ptr)[1] = (uint16_t)rand();
@@ -102,18 +103,17 @@ pool_s *pool_init (wgraph_s *g)
      *(ptr-1) &= p->cmask;
   }
   p->graph = g;
-  p->mutateprob = _INITMUTATIONPROB;
+  p->mutateprob = INITMUTATIONPROB;
   p->bitlen = ((p->remain) ? ((p->chromsize * 64) - (64 - p->remain)) : p->chromsize*64);
-  for (sum = 0, ptr = p->popul, i = 0; i < _POOLSIZE; i++, ptr += p->chromsize) {
+  for (sum = 0, ptr = p->popul, i = 0; i < POOLSIZE; i++, ptr += p->chromsize) {
     p->rbuf[i].fitness = getfitness (p, ptr);
     p->rbuf[i].ptr = ptr;
     sum += p->rbuf[i].fitness;
   }
-  for (i = 0, p->accum = 0; i < _POOLSIZE; i++) {
+  for (i = 0, p->accum = 0; i < POOLSIZE; i++)
     p->rbuf[i].prob = sum / p->rbuf[i].fitness;
-  }
-  qsort (p->rbuf, _POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
-  for (i = 0; i < _POOLSIZE; i++) {
+  qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
+  for (i = 0; i < POOLSIZE; i++) {
     p->accum += p->rbuf[i].prob;
     p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
     if (i)
@@ -123,7 +123,7 @@ pool_s *pool_init (wgraph_s *g)
   return p;
 }
 
-void printlword (uint64_t lword, uint8_t end)
+void printqword (uint64_t lword, uint8_t end)
 {
   uint8_t i;
   
@@ -140,9 +140,9 @@ void printchrom (pool_s *p, uint64_t *chrom)
   n = p->chromsize;
   for (i = 0; i < n; i++) {
     if (i == n-1)
-      printlword (chrom[i], p->remain);
+      printqword (chrom[i], p->remain);
     else
-      printlword (chrom[i], 64);
+      printqword (chrom[i], 64);
   }
 }
 
@@ -153,21 +153,26 @@ void printpool (pool_s *p)
   
   n = p->chromsize;
   ptr = p->popul;
-  for (index = 0; index < _POOLSIZE; index++) {
+  for (index = 0; index < POOLSIZE; index++) {
     printf("%d:\t", index);
     printchrom (p, ptr);
-    printf("  %f, %d, %d", getfitness (p, ptr), ((uint8_t *)ptr)[7] >> (8 - _GET_CHBITLEN(p)), isfeasible (p, ptr));
+    printf("  %f, %d, %d", getfitness (p, ptr), ((uint8_t *)ptr)[7] >> (8 - GET_CHBITLEN(p)), isfeasible (p, ptr));
     printf("\n");
     ptr += n;
   }
 }
 
+
+/*
+ Iterative Binary search that returns the index of roulette 'region'
+ that 'key' fits into.  
+ */
 int bsearch_r (roulette_s *roul, uint32_t key)
 {
 	int mid, low, high;
 
   low = 0;
-  high = _POOLSIZE-1;
+  high = POOLSIZE-1;
   for (mid = low+(high-low)/2; high >= low; mid = low+(high-low)/2) {
     if (key < roul[mid].cummulative)
       high = mid - 1;
@@ -184,11 +189,11 @@ void roulette_sf (pool_s *p, selected_s *parents)
   int i;
   uint32_t i1, i2;
   
-  for (i = 0; i < _NSELECT; i++) {
+  for (i = 0; i < NSELECT; i++) {
     i1 = bsearch_r (p->rbuf, rand() % p->accum);
     i2 = bsearch_r (p->rbuf, rand() % p->accum);
     if (i2 == i1)
-      i2 = (i2 - 1) % _POOLSIZE;
+      i2 = (i2 - 1) % POOLSIZE;
     parents->couples[i].p1 = &p->rbuf[i1];
     parents->couples[i].p2 = &p->rbuf[i2];
   }
@@ -226,8 +231,8 @@ float sumweights (pool_s *p, uint64_t *chrom)
 {
   uint8_t pos;
   uint16_t i, j, csize, nedges;
-  uint64_t iter;
-  uint64_t *ptr;
+  uint64_t iter,
+           *ptr;
   vertex_s *v;
   edge_s **edges;
   float weight;
@@ -236,7 +241,7 @@ float sumweights (pool_s *p, uint64_t *chrom)
     if (i == p->chromsize-1 && p->remain)
       csize = p->remain;
     else
-      csize = 63;
+      csize = 64;
     for (iter = *ptr, pos = 0; pos < csize; iter &= ~(1llu << pos)) {
       pos = ffsl(iter);
       if (!pos)
@@ -246,7 +251,7 @@ float sumweights (pool_s *p, uint64_t *chrom)
       nedges = v->nedges;
       edges = v->edges;
       for (j = 0; j < nedges; j++) {
-        if (iscut(p, ptr, (edges[j]->v1 == v) ? edges[j]->v2 : edges[j]->v1))
+        if (iscut(p, chrom, (edges[j]->v1 == v) ? edges[j]->v2 : edges[j]->v1))
           weight += edges[j]->weight;
       }
     }
@@ -261,7 +266,7 @@ void printweights (pool_s *p)
   
   n = p->chromsize;
   ptr = p->popul;
-  for (i = 0; i < _POOLSIZE; i++) {
+  for (i = 0; i < POOLSIZE; i++) {
     printf("Weight: %f, %d, %d\n",sumweights (p, ptr), n, isfeasible(p, ptr));
     ptr += n;
   }
@@ -272,7 +277,7 @@ float getfitness (pool_s *p, uint64_t *chrom)
   int setcount, differ;
   
   setcount = countdigits (p, chrom);
-  differ = abs(2*setcount-_GET_CHBITLEN(p));
+  differ = abs(2*setcount-GET_CHBITLEN(p));
   return sumweights (p, chrom) + (differ << 4);
 }
 
@@ -283,22 +288,27 @@ void computeprob (pool_s *p)
   float sum, fc1, fc2;
   
   sum = p->fitsum;
-  for (i = 0, p->accum = 0; i < _POOLSIZE; i++)
+  for (i = 0, p->accum = 0; i < POOLSIZE; i++)
     p->rbuf[i].prob = sum / p->rbuf[i].fitness;
-  qsort (p->rbuf, _POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
-  for (i = 0; i < _POOLSIZE; i++) {
+  qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
+  for (i = 0; i < POOLSIZE; i++) {
     p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
     if (i)
       p->rbuf[i].cummulative += p->rbuf[i-1].cummulative;
     p->accum += p->rbuf[i].prob;
   }
-  if (isfeasible(p, p->rbuf[_POOLSIZE-1].ptr))
-    p->bestfeasible = p->rbuf[_POOLSIZE-1].ptr;
+  if (isfeasible(p, p->rbuf[POOLSIZE-1].ptr))
+    p->bestfeasible = p->rbuf[POOLSIZE-1].ptr;
 }
 
 int isfeasible (pool_s *p, uint64_t *chrom)
 {
-  return (2*countdigits (p, chrom) == _GET_CHBITLEN(p));
+  if (GET_CHBITLEN(p) % 2)
+    return  (2 * countdigits (p, chrom) == GET_CHBITLEN(p) - 1)
+            ||
+            (2 * countdigits (p, chrom) == GET_CHBITLEN(p) + 1);
+  else
+    return  (2 * countdigits (p, chrom) == GET_CHBITLEN(p));
 }
 
 void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
@@ -309,9 +319,9 @@ void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
             bitlen;
   uint64_t  tmp1, tmp2, mask;
   
-  if ((p1 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[_POOLSIZE-1].ptr && isfeasible(p, p2)))
+  if ((p1 == p->rbuf[POOLSIZE-1].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[POOLSIZE-1].ptr && isfeasible(p, p2)))
     return;
-  bitlen = _GET_CHBITLEN(p);
+  bitlen = GET_CHBITLEN(p);
   point = rand() % bitlen;
   index = point % 64;
   tmp1 = *p1;
@@ -369,7 +379,7 @@ void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
   else
     dst2 = p2;
   if (dst1 == dst2) {
-    rp2 = &p->rbuf[1%_POOLSIZE];
+    rp2 = &p->rbuf[1%POOLSIZE];
     dst2 = rp2->ptr;
   }
   p->fitsum -= (rp1->fitness + rp2->fitness);
@@ -396,11 +406,11 @@ void mutate1 (pool_s *p, uint64_t *victim)
   int i, n;
   uint16_t index;
   
-  n = _GET_CHBITLEN(p) >> 4;
+  n = GET_CHBITLEN(p) >> 4;
   if (!isfeasible(p, victim))
     ++n;
   for (i = 0; i < n; i++) {
-    index = rand() % _GET_CHBITLEN(p);
+    index = rand() % GET_CHBITLEN(p);
     victim[index / 64] ^= (1llu << (index % 64));
   }
 }
@@ -410,15 +420,10 @@ void mutate2 (pool_s *p, uint64_t *victim)
   uint16_t index, i;
   
   for (i = 0; i < 10; i++) {
-    index = rand() % _GET_CHBITLEN(p);
+    index = rand() % GET_CHBITLEN(p);
     victim[index / 64] ^= (1llu << (index ));
   }
 }
-
-#define CBUF_SIZE 32
-
-
-void pSIGALRM (int signal) {}
 
 int run_ge (wgraph_s *g)
 {
@@ -427,10 +432,9 @@ int run_ge (wgraph_s *g)
   uint16_t n, index;
   selected_s parents;
   unsigned char cbuf[CBUF_SIZE];
-  
-  if (signal(SIGINT, sigdummy) == SIG_ERR)
+  if (signal(SIGINT, pSIGINT) == SIG_ERR)
     return -1;
-  if (signal(SIGALRM, pSIGALRM) == SIG_ERR)
+  if (signal(SIGALRM, sigNOP) == SIG_ERR)
     return -1;
   memset (cbuf, 0, sizeof(cbuf));
   p = pool_init (g);
@@ -440,7 +444,7 @@ int run_ge (wgraph_s *g)
     return -1;
   pid_ = fork();
   if (pid_) {
-    cbuf[CBUF_SIZE-1] = _UEOF;
+    cbuf[CBUF_SIZE-1] = UEOF;
     while (1) {
       index = 0;
       while ((cbuf[index] = (char)getchar()) != '\n') {
@@ -449,22 +453,22 @@ int run_ge (wgraph_s *g)
         else
           printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
       }
-      cbuf[index] = _UEOF;
+      cbuf[index] = UEOF;
       write(pipe_[1], cbuf, CBUF_SIZE);
       kill (pid_, SIGUSR1);
       pause ();
     }
   }
   else {
-    if (signal(SIGUSR1, siginthandle) == SIG_ERR)
+    if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
       return -1;
-    if (signal(SIGINT, pSIGALRM) == SIG_ERR)
+    if (signal(SIGINT, sigNOP) == SIG_ERR)
       return -1;
     n = p->chromsize;
     p->start = clock();
     while (1) {
       p->select (p, &parents);
-      for (i = 0; i < _NSELECT; i++)
+      for (i = 0; i < NSELECT; i++)
         p->cross (p, parents.couples[i].p1, parents.couples[i].p2);
       computeprob(p);
       ++p->gen;
@@ -479,24 +483,24 @@ void printstatus (void)
   
   printf("Status at Generation: %llu\n", pool_->gen);
   printpool(pool_);
-  printf("\nMost Fit ( weight = %f ):\n", pool_->rbuf[_POOLSIZE-1].fitness);
-  printchrom (pool_, pool_->rbuf[_POOLSIZE-1].ptr);
-  if (isfeasible(pool_, pool_->rbuf[_POOLSIZE-1].ptr))
+  printf("\nMost Fit ( weight = %f ):\n", pool_->rbuf[POOLSIZE-1].fitness);
+  printchrom (pool_, pool_->rbuf[POOLSIZE-1].ptr);
+  if (isfeasible(pool_, pool_->rbuf[POOLSIZE-1].ptr))
     printf("\nIs Feasible\n");
   else {
     printf("\nNot Feasible\n");
     if (pool_->bestfeasible) {
       printf("\nMost Fit Feasible ( weight = %f ):\n", getfitness(pool_, pool_->bestfeasible));
-          printchrom (pool_, pool_->rbuf[i].ptr);
+      printchrom (pool_, pool_->bestfeasible);
     }
     else
       printf("No Feasibles Found\n");
   }
-  printf("Time Elapse: %llu\n", (uint64_t)(clock() - pool_->start));
+  printf("Elapsed Time: %llu\n", (uint64_t)(clock() - pool_->start));
 
 }
 
-void siginthandle (int signal)
+void cSIGUSR1 (int signal)
 {
   int tmpint;
   unsigned char cbuf[CBUF_SIZE];
@@ -519,7 +523,7 @@ void siginthandle (int signal)
       tokens = tokens->next;
       if (!strcmp(tokens->lexeme, "prob")) {
         tokens = tokens->next;
-        if (tokens->type == _NUM) {
+        if (tokens->type == T_NUM) {
           tmpint = atoi (tokens->lexeme);
           if (tmpint > 100)
             tmpint = 100;
@@ -531,7 +535,7 @@ void siginthandle (int signal)
       }
       else if (!strcmp(tokens->lexeme, "op")) {
         tokens = tokens->next;
-        if (tokens->type == _NUM) {
+        if (tokens->type == T_NUM) {
           tmpint = atoi (tokens->lexeme);
           if (tmpint == 1) {
             printf ("Set to Mutate Function 1\n");
@@ -591,12 +595,12 @@ exit_:
   kill(getppid(), SIGALRM);
 }
 
-void sigdummy (int signal)
+void pSIGINT (int signal)
 {
   unsigned char cbuf[CBUF_SIZE];
   
   strcpy(cbuf, "status");
-  cbuf[6] = _UEOF;
+  cbuf[6] = UEOF;
   write(pipe_[1], cbuf, CBUF_SIZE);
   kill (pid_, SIGUSR1);
   pause();
@@ -609,5 +613,5 @@ void printsolution (pool_s *p, int index)
 
 inline void printfittest (pool_s *p)
 {
-  printsolution (p, _POOLSIZE-1);
+  printsolution (p, POOLSIZE-1);
 }

@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define NCHROM 98
+#define NCHROM 134
 
 int main(int argc, const char * argv[])
 {

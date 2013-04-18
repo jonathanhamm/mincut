@@ -80,12 +80,12 @@ unsigned char *read_gfile (const char *fname)
     perror("Error Opening File");
     exit(EXIT_FAILURE);
   }
-  buf = malloc(_INITBUFSIZE);
+  buf = malloc(INITBUFSIZE);
   if (!buf)
     goto err_;
-  for (bsize = _INITBUFSIZE, offset = 0; (buf[offset] = (unsigned char)fgetc(f)) != _UEOF; offset++) {
+  for (bsize = INITBUFSIZE, offset = 0; (buf[offset] = (unsigned char)fgetc(f)) != UEOF; offset++) {
     if (offset == bsize-1) {
-      bsize += _INITBUFSIZE;
+      bsize += INITBUFSIZE;
       buf = realloc (buf, bsize);
       if (!buf)
         goto err_;
@@ -107,7 +107,7 @@ int vhashinsert (vertex_s *v, uint16_t index)
   uint16_t i;
   vrec_s *ptr;
 
-  i = (unsigned long)v % _VHTABLESIZE;
+  i = (unsigned long)v % VHTABLESIZE;
   if (vhash_.table[i].isoccupied) {
     ptr = malloc (sizeof(*ptr));
     if (!ptr)
@@ -136,7 +136,7 @@ uint16_t vgetindex (vertex_s *v)
   uint16_t i;
   vrec_s *ptr;
   
-  i = (unsigned long)v % _VHTABLESIZE;
+  i = (unsigned long)v % VHTABLESIZE;
   if (vhash_.table[i].v == v)
     return vhash_.table[i].index;
   else {
@@ -159,23 +159,23 @@ gtoken_s *lex_ (unsigned char *buf)
   unsigned char   *bckptr;
   gtoken_s        *curr;
   
-  for (curr = NULL, bckptr = buf; *buf != _UEOF;) {
+  for (curr = NULL, bckptr = buf; *buf != UEOF;) {
     switch (*buf) {
       case ',':
-        curr = gtoken_s_ (curr, ",", _COMMA);
+        curr = gtoken_s_ (curr, ",", T_COMMA);
         buf++;
         break;
       case '=':
-        curr = gtoken_s_ (curr, "=", _EQU);
+        curr = gtoken_s_ (curr, "=", T_EQU);
         buf++;
         break;
       case '{':
-        curr = gtoken_s_ (curr, "{", _OPENBRACE);
+        curr = gtoken_s_ (curr, "{", T_OPENBRACE);
         buf++;
         break;
       case '}':
         buf++;
-        curr = gtoken_s_ (curr, "}", _CLOSEBRACE);
+        curr = gtoken_s_ (curr, "}", T_CLOSEBRACE);
         break;
       default:
         if (*buf <= ' ')
@@ -183,25 +183,25 @@ gtoken_s *lex_ (unsigned char *buf)
         else if ((*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')) {
           for (bckptr = buf, ++buf; (*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')
                || (*buf >= '0' && *buf <= '9'); buf++) {
-            if (buf - bckptr == _MAXLEXLEN) {
+            if (buf - bckptr == MAXLEXLEN) {
               printf("Too Long ID: %15s", bckptr);
               goto err_;
             }
           }
           backup = *buf;
           *buf = '\0';
-          curr = gtoken_s_ (curr, bckptr, _ID);
+          curr = gtoken_s_ (curr, bckptr, T_ID);
           *buf = backup;
         } else if (*buf >= '0' && *buf <= '9') {
           for (bckptr = buf, buf++; (*buf >= '0' && *buf <= '9'); buf++) {
-            if (buf - bckptr == _MAXLEXLEN) {
+            if (buf - bckptr == MAXLEXLEN) {
               printf("Too Long ID: %15s", bckptr);
               goto err_;
             }
           }
           if (*buf == '.') {
             for (buf++; (*buf >='0' && *buf <= '9'); buf++) {
-              if (buf - bckptr == _MAXLEXLEN) {
+              if (buf - bckptr == MAXLEXLEN) {
                 printf("Too Long ID: %15s", bckptr);
                 goto err_;
               }
@@ -209,16 +209,16 @@ gtoken_s *lex_ (unsigned char *buf)
           }
           backup = *buf;
           *buf = '\0';
-          curr = gtoken_s_ (curr, bckptr, _NUM);
+          curr = gtoken_s_ (curr, bckptr, T_NUM);
           *buf = backup;
         } else {
-          printf("Symbol Error %s    %c\n",bckptr,*buf);
+          printf("Symbol Error %s %c\n", bckptr, *buf);
           goto err_;
         }
         break;
     }
   }
-  curr = gtoken_s_ (curr, "$", _EOF);
+  curr = gtoken_s_ (curr, "$", T_EOF);
   return stream_;
 err_:
   freetokens (stream_);
@@ -280,7 +280,7 @@ void pgraph_ (wgraph_s *g)
 {
   pnodelist_(g);
   pedgelist_(g);
-  if (__GTNEXT()->type == _EOF)
+  if (__GTNEXT()->type == T_EOF)
     printf("Parse Success!\n");
 }
 
@@ -289,23 +289,23 @@ void pnodelist_ (wgraph_s *g)
   vertex_s *v;
   
   if (*(uint16_t *)stream_->lexeme == *(uint16_t *)"V") /*if(!strcmp(stream_->lexeme,"v"))*/
-  if (__GTNEXT()->type == _EQU)
-  if (__GTNEXT()->type == _OPENBRACE)
-  if (__GTNEXT()->type == _ID) {
+  if (__GTNEXT()->type == T_EQU)
+  if (__GTNEXT()->type == T_OPENBRACE)
+  if (__GTNEXT()->type == T_ID) {
     v = vertex_s_(stream_);
     vhashinsert (v, g->nvert);
     insert_vertex (g, v);
     pnodeparam_(g);
   }
-  if (stream_->type == _CLOSEBRACE)
+  if (stream_->type == T_CLOSEBRACE)
     return;
 }
 
 void pnodeparam_ (wgraph_s *g)
 {
   vertex_s *v;
-  if (__GTNEXT()->type == _COMMA)
-  if (__GTNEXT()->type == _ID) {
+  if (__GTNEXT()->type == T_COMMA)
+  if (__GTNEXT()->type == T_ID) {
     v = vertex_s_(stream_);
     vhashinsert (v, g->nvert);
     insert_vertex (g, v);
@@ -316,17 +316,17 @@ void pnodeparam_ (wgraph_s *g)
 void pedgelist_ (wgraph_s *g)
 {
   if (*(uint16_t *)__GTNEXT()->lexeme == *(uint16_t *)"E")   /*if (!strcmp(__GTNEXT()->lexeme, "E"))*/
-  if (__GTNEXT()->type == _EQU)
-  if (__GTNEXT()->type == _OPENBRACE)
+  if (__GTNEXT()->type == T_EQU)
+  if (__GTNEXT()->type == T_OPENBRACE)
     e_(g);
   pedgeparam_(g);
-  if (stream_->type == _CLOSEBRACE)
+  if (stream_->type == T_CLOSEBRACE)
     return;
 }
 
 void pedgeparam_ (wgraph_s *g)
 {
-  while (__GTNEXT()->type == _COMMA)
+  while (__GTNEXT()->type == T_COMMA)
     e_(g);
 }
 
@@ -336,20 +336,20 @@ void e_ (wgraph_s *g)
   vertex_s    *v1,
               *v2;
   
-  if (__GTNEXT()->type == _OPENBRACE)
-  if (__GTNEXT()->type == _ID) {
+  if (__GTNEXT()->type == T_OPENBRACE)
+  if (__GTNEXT()->type == T_ID) {
     v1 = v_lookup (g, stream_->lexeme);
     if (!v1)
       return;
-    if (__GTNEXT()->type == _COMMA)
-    if (__GTNEXT()->type == _ID) {
+    if (__GTNEXT()->type == T_COMMA)
+    if (__GTNEXT()->type == T_ID) {
       v2 = v_lookup (g, stream_->lexeme);
       if (!v2)
         return;
-      if (__GTNEXT()->type == _COMMA)
-      if (__GTNEXT()->type == _NUM) {
+      if (__GTNEXT()->type == T_COMMA)
+      if (__GTNEXT()->type == T_NUM) {
         weight = atof(stream_->lexeme);
-        if (__GTNEXT()->type == _CLOSEBRACE) {
+        if (__GTNEXT()->type == T_CLOSEBRACE) {
           g->nedges++;
           edge_s_ (v1, v2, weight);
           return;
@@ -422,13 +422,13 @@ int insert_vertex (wgraph_s *graph, vertex_s *v)
 
   vtable = graph->vtable;
   if (!vtable) {
-    vtable = calloc(_INITTSIZE, sizeof(*vtable));
+    vtable = calloc(INITTSIZE, sizeof(*vtable));
     if (!vtable)
       return -1;
-    cvtablesize = _INITTSIZE;
+    cvtablesize = INITTSIZE;
   } else {
     if (graph->nvert == cvtablesize) {
-      cvtablesize += _INITTSIZE;
+      cvtablesize += INITTSIZE;
       vtable = realloc (vtable, cvtablesize * sizeof(*vtable));
       if (!vtable)
         return -1;

@@ -4,13 +4,21 @@
 #include <stdint.h>
 #include <time.h>
 
-#define _INITMUTATIONPROB 3
-#define _POOLSIZE 100
-#define _NSELECT (_POOLSIZE / 5)
-#define _GET_CHRBYSIZE(pool) ((pool->chromsize / 8) + \
+#define CBUF_SIZE 32
+#define INITMUTATIONPROB 3
+#define POOLSIZE 50
+#define PSIZE_ROUL_DIV 5
+
+#if POOLSIZE / PSIZE_ROUL_DIV == 0
+  #define NSELECT 1
+#else
+  #define NSELECT (POOLSIZE / PSIZE_ROUL_DIV)
+#endif
+
+#define GET_CHRBYSIZE(pool) ((pool->chromsize / 8) + \
                                   (pool->chromsize % 8 != 0))
-#define _GET_CHBITLEN(pool) (pool->bitlen)
-#define _CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0)) 
+#define GET_CHBITLEN(pool) (pool->bitlen)
+#define CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0)) 
 
 typedef struct pool_s pool_s;
 
@@ -36,7 +44,7 @@ struct ppair_s
 
 struct selected_s
 {
-  ppair_s couples[_NSELECT];
+  ppair_s couples[NSELECT];
 };
 
 
@@ -58,7 +66,7 @@ struct pool_s
   float fitsum;
   uint32_t accum;
   uint64_t *bestfeasible;
-  roulette_s rbuf[_POOLSIZE];
+  roulette_s rbuf[POOLSIZE];
   uint64_t popul[0];
 };
 
@@ -83,4 +91,5 @@ extern void mutate1 (pool_s *p, uint64_t *victim);
 extern void mutate2 (pool_s *p, uint64_t *victim);
 
 extern void buildgraph (pool_s *p);
+
 #endif
