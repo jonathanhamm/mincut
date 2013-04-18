@@ -58,7 +58,7 @@ pool_s *pool_s_ (uint16_t csize)
   
   p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(csize) * 8);
   if (!p)
-    goto err_;
+    return NULL;
   pool_ = p;
   p->chromsize = (csize / 64) + (csize % 64 != 0);
   p->remain = csize % 64;
@@ -76,9 +76,6 @@ pool_s *pool_s_ (uint16_t csize)
   printqword(p->cmask, 64);
   printf ("\n");
   return p;
-  
-err_:
-  return NULL;
 }
 
 pool_s *pool_init (wgraph_s *g)
@@ -432,16 +429,17 @@ int run_ge (wgraph_s *g)
   uint16_t n, index;
   selected_s parents;
   unsigned char cbuf[CBUF_SIZE];
+  
   if (signal(SIGINT, pSIGINT) == SIG_ERR)
-    return -1;
+    THROW_EXCEPTION();
   if (signal(SIGALRM, sigNOP) == SIG_ERR)
-    return -1;
+    THROW_EXCEPTION();
   memset (cbuf, 0, sizeof(cbuf));
   p = pool_init (g);
   if (!p)
-    return -1;
+    THROW_EXCEPTION();
   if (pipe (pipe_) == -1)
-    return -1;
+    THROW_EXCEPTION();
   pid_ = fork();
   if (pid_) {
     cbuf[CBUF_SIZE-1] = UEOF;
@@ -461,9 +459,9 @@ int run_ge (wgraph_s *g)
   }
   else {
     if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
-      return -1;
+      THROW_EXCEPTION();
     if (signal(SIGINT, sigNOP) == SIG_ERR)
-      return -1;
+      THROW_EXCEPTION();
     n = p->chromsize;
     p->start = clock();
     while (1) {
@@ -475,6 +473,10 @@ int run_ge (wgraph_s *g)
     }
   }
   return 0;
+  
+exception_:
+  perror("Failed Setting Program Initialization");
+  return -1;
 }
 
 void printstatus (void)
@@ -589,9 +591,8 @@ void cSIGUSR1 (int signal)
   else {
     printf("'%s' not recognized.\n",tokens->lexeme);
   }
-  
-exit_:
   freetokens (head);
+exit_:
   kill(getppid(), SIGALRM);
 }
 

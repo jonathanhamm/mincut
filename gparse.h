@@ -19,14 +19,13 @@
 #define T_EQU        6
 #define T_EOF        7
 
-#define __IDCPY(DST,SRC)    *(uint64_t *)DST = *(uint64_t *)SRC; \
-*(((uint64_t *)DST) + 1) = *(((uint64_t *)SRC) + 1)
+#define THROW_EXCEPTION() goto exception_
 
-#define __IDCMP(ID1,ID2)    (*(uint64_t *)ID1 == *(uint64_t *)ID2 && \
-*(((uint64_t *)ID1) + 1) == *(((uint64_t *)ID2) + 1))
+#define IDCPY(DST,SRC)    *(uint64_t *)DST = *(uint64_t *)SRC; \
+                          *(((uint64_t *)DST) + 1) = *(((uint64_t *)SRC) + 1)
 
-#define __GTNEXT() (stream_ = stream_->next)
-#define __GTPREV() (stream_ = stream_->prev)
+#define GTNEXT() (stream_ = stream_->next)
+#define GTPREV() (stream_ = stream_->prev)
 
 
 typedef struct gnode_s gnode_s;
