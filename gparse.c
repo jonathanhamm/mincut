@@ -138,6 +138,7 @@ gtoken_s *lex_ (unsigned char *buf)
   unsigned char   *bckptr;
   gtoken_s        *curr;
   
+  stream_ = NULL;
   for (curr = NULL, bckptr = buf; *buf != UEOF;) {
     switch (*buf) {
       case ',':
@@ -191,7 +192,7 @@ gtoken_s *lex_ (unsigned char *buf)
           curr = gtoken_s_ (curr, bckptr, T_NUM);
           *buf = backup;
         } else {
-          printf("Symbol Error %s %c\n", bckptr, *buf);
+          printf("Symbol Error %c\n", *bckptr);
           THROW_EXCEPTION();
         }
         break;
@@ -293,6 +294,7 @@ void pnodelist_ (wgraph_s *g)
 void pnodeparam_ (wgraph_s *g)
 {
   vertex_s *v;
+  
   if (GTNEXT()->type == T_COMMA)
   if (GTNEXT()->type == T_ID) {
     v = vertex_s_(stream_);

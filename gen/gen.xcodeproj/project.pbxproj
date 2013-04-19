@@ -44,6 +44,8 @@
 		2FC4A188171B6F3C001D8F8B /* test1024 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test1024; path = ../../test1024; sourceTree = "<group>"; };
 		2FC4A189171CF59E001D8F8B /* 10_256 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = 10_256; path = ../../10_256; sourceTree = "<group>"; };
 		2FC4A18A171D300C001D8F8B /* test98 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test98; path = ../../test98; sourceTree = "<group>"; };
+		2FC4A18B171FBEB8001D8F8B /* commandlinegrammar */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = commandlinegrammar; path = ../../commandlinegrammar; sourceTree = "<group>"; };
+		2FC4A18C17208877001D8F8B /* ptable */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = ptable; path = ../../ptable; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +78,8 @@
 		2F097CC016CDF40D00856678 /* gen */ = {
 			isa = PBXGroup;
 			children = (
+				2FC4A18C17208877001D8F8B /* ptable */,
+				2FC4A18B171FBEB8001D8F8B /* commandlinegrammar */,
 				2FC4A18A171D300C001D8F8B /* test98 */,
 				2FC4A189171CF59E001D8F8B /* 10_256 */,
 				2FC4A188171B6F3C001D8F8B /* test1024 */,

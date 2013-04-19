@@ -1,19 +1,25 @@
 <cparse>=>
 	status | exit | quit | q | Q 
 	| 
-	set <mutate> | get <mutate> | show <show>
+	set <mutate> <mval> | get <mutate> | show <show>
+	
 <mutate>=>
 	mutate <mutate'>
 <mutate'>=>
-	prob <prob> | op <op>
-<prob>=>
-	numreal | €
-<op>=>
-	id | €
-<show>=>
-	best <feasible>
-<feasible>=>
-	feasible | €
+	prob | op
 	
+<mval>=> 
+  numreal | id
+  
+<show>=>
+	numint
+	|
+	best <feasible>
+	
+<feasible>=>
+	feasible
+	|
+	€
+
 	
 	

@@ -56,7 +56,7 @@ pool_s *pool_s_ (wgraph_s *g)
   uint64_t  *ptr;
   float sum;
   
-  p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(g->nvert) * 8);
+  p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(g->nvert+1) * 8);
   if (!p) {
     perror ("Malloc Error");
     exit (EXIT_FAILURE);
@@ -71,7 +71,7 @@ pool_s *pool_s_ (wgraph_s *g)
         p->cmask |= (1llu << i);
   }
   p->select = roulette_sf;
-  p->cross = uniform_cr;
+  p->cross = singlepoint_cr;
   p->mutate = mutate1;
   p->gen = 0;
   ptr = p->popul;
@@ -144,7 +144,6 @@ void printpool (pool_s *p)
   }
 }
 
-
 /*
  Iterative Binary search that returns the index of roulette 'region'
  that 'key' fits into.  
@@ -163,6 +162,8 @@ int bsearch_r (roulette_s *roul, uint32_t key)
     else
       return mid;
   }
+  if (mid == POOLSIZE)
+    --mid;
   return mid;
 }
 
@@ -293,27 +294,88 @@ int isfeasible (pool_s *p, uint64_t *chrom)
     return  (2 * countdigits (p, chrom) == GET_CHBITLEN(p));
 }
 
-void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2)
+int getbit (uint64_t *chrom, uint16_t pos)
 {
-  uint16_t  point,
-            remain,
-            index, i,
-            bitlen;
-  uint64_t  tmp1, tmp2, mask;
+  return (chrom[pos / 64] >> (pos % 64)) & 1llu;
+}
+
+void setbit (uint64_t *chrom, uint16_t pos, int val)
+{
+  chrom[pos / 64] &= ~(1llu << (pos % 64));
+  if (val)
+    chrom[pos / 64] |= (1llu << (pos % 64));
+}
+
+#define TESTCROSSOVER_ 
+#undef TESTCROSSOVER_
+
+void singlepoint_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
+{
+  int i, pindex;
+  uint16_t point, inv;
+  uint64_t mask;
+  uint64_t *backup1, *backup2, *p1, *p2,
+           *dst1, *dst2;
   
-  if ((p1 == p->rbuf[POOLSIZE-1].ptr && isfeasible(p,p1)) || (p2 == p->rbuf[POOLSIZE-1].ptr && isfeasible(p, p2)))
-    return;
-  bitlen = GET_CHBITLEN(p);
-  point = rand() % bitlen;
-  index = point % 64;
-  tmp1 = *p1;
-  tmp2 = *p2;
-  for (i = 0, mask = 0; i < index+1; i++)
-    mask |= (1llu << i);
-  *p1 = p2[point / 64] >> (index+1);
-  p2[point / 64] = ((tmp1 & mask) << (bitlen-(index+1)));
-  *p2 |= tmp1 >> (index+1);
-  p1[point / 64] |= ((tmp2 & mask) << (bitlen-(index+1)));
+  p1 = rp1->ptr;
+  p2 = rp2->ptr;
+  if (rp1->ptr == p->bestfeasible) {
+    rp1 = &p->rbuf[0];
+    dst1 = rp1->ptr;
+  }
+  else
+    dst1 = p1;
+  if (rp2->ptr == p->bestfeasible) {
+    rp2 = &p->rbuf[0];
+    dst2 = rp2->ptr;
+  }
+  else
+    dst2 = p2;
+  if (dst1 == dst2) {
+    rp2 = &p->rbuf[1%POOLSIZE];
+    dst2 = rp2->ptr;
+  }
+  p->fitsum -= (rp1->fitness + rp2->fitness);
+#ifdef TESTCROSSOVER_
+  printf ("parents: \n");
+  printchrom(p, p1);
+  printf("\n");
+  printchrom (p, p2);
+#endif
+  backup1 = &p->popul[CRBACKUP1];
+  backup2 = &p->popul[CRBACKUP2];
+  for (i = 0; i < p->chromsize; i++)
+    backup1[i] = p1[i];
+  for (i = 0; i < p->chromsize; i++)
+    backup2[i] = p2[i];
+  point = rand() % GET_CHBITLEN(p);
+  inv = GET_CHBITLEN(p) - point;
+#ifdef TESTCROSSOVER_
+  printf("\nPoint: %d\n", point);
+#endif
+  if (point >= inv) {
+    for (i = 0; i < point; i++) {
+      setbit(dst1, i, getbit(backup2, point+i));
+      setbit(dst2, inv+i, getbit(backup1, i));
+    }
+  }
+  else {
+    for (i = 0; i < point; i++) {
+      setbit(dst1, i, getbit(backup2, inv+i));
+      setbit(dst2, point+i, getbit(backup1, i));
+    }
+
+  }
+#ifdef TESTCROSSOVER_
+  printf("Children:\n");
+  printchrom(p, dst1);
+  printf("\n");
+  printchrom(p, dst2);
+  printf("\n\n");
+#endif
+  rp1->fitness = getfitness (p, dst1);
+  rp2->fitness = getfitness (p, dst2);
+  p->fitsum += (rp1->fitness + rp2->fitness);
 }
 
 
@@ -388,7 +450,7 @@ void mutate1 (pool_s *p, uint64_t *victim)
   int i, n;
   uint16_t index;
   
-  n = GET_CHBITLEN(p) >> 4;
+  n = rand() % (GET_CHBITLEN(p) / 8);
   if (!isfeasible(p, victim))
     ++n;
   for (i = 0; i < n; i++) {
@@ -427,7 +489,7 @@ int run_ge (wgraph_s *g)
     THROW_EXCEPTION();
   pid_ = fork();
   if (pid_) {
-    printf ("Now running program.\n");
+    printf ("Now running program.\n> ");
     cbuf[CBUF_SIZE-1] = UEOF;
     while (1) {
       index = 0;
@@ -441,6 +503,7 @@ int run_ge (wgraph_s *g)
       write(pipe_[1], cbuf, CBUF_SIZE);
       kill (pid_, SIGUSR1);
       pause ();
+      
     }
   }
   else {
@@ -488,97 +551,34 @@ void printstatus (void)
 
 }
 
+#define COM_PROB 1
+#define COM_OP   2
+static void cparse (gtoken_s *stream);
+static int  p_mutate (gtoken_s *stream);
+static int  p_mutate_ (gtoken_s *stream);
+static int  p_mval (gtoken_s *stream);
+static void p_show (gtoken_s *stream);
+static void p_feasible (gtoken_s *stream);
+
+
 void cSIGUSR1 (int signal)
 {
   int tmpint;
   unsigned char cbuf[CBUF_SIZE];
-  gtoken_s *head, *tokens;
+  gtoken_s *head;
   
   read(pipe_[0], cbuf, CBUF_SIZE);
   head = lex_ (cbuf);
-  tokens = head;
-  if (!tokens) {
+  if (!head) {
     printf ("Illegal Symbols Used\n");
     goto exit_;
   }
-  else if (!strcmp(tokens->lexeme, "status")) {
-    printstatus ();
-  }
-  else if (!strcmp(tokens->lexeme, "set")) {
-    tokens = tokens->next;
-    if (!strcmp(tokens->lexeme, "mutate")) {
-      tokens = tokens->next;
-      if (!strcmp(tokens->lexeme, "prob")) {
-        tokens = tokens->next;
-        if (tokens->type == T_NUM) {
-          tmpint = atoi (tokens->lexeme);
-          if (tmpint > 100)
-            tmpint = 100;
-          else if (tmpint < 0)
-            tmpint = 0;
-          printf("Mutation Probability Set at: %d%%\n", tmpint);
-          pool_->mutateprob = tmpint;
-        }
-      }
-      else if (!strcmp(tokens->lexeme, "op")) {
-        tokens = tokens->next;
-        if (tokens->type == T_NUM) {
-          tmpint = atoi (tokens->lexeme);
-          if (tmpint == 1) {
-            printf ("Set to Mutate Function 1\n");
-            pool_->mutate = mutate1;
-          }
-          else if (tmpint == 2) {
-            printf ("Set to Mutate Function 2\n");
-            pool_->mutate = mutate2;
-          }
-          else
-            printf ("Expected 1 or 2, but got %s\n", tokens->lexeme);
-        }
-        else 
-          printf ("Expected Number, but got %s\n", tokens->lexeme);
-      }
-      else
-        printf ("Expected 'op' or 'prob' but got %s\n", tokens->lexeme);
-    }
-  }
-  else if (!strcmp(tokens->lexeme, "get")) {
-    tokens = tokens->next;
-    if (!strcmp(tokens->lexeme, "mutate")) {
-      tokens = tokens->next;
-      if (!strcmp(tokens->lexeme, "prob"))
-        printf ("Mutation Probability: %d%%\n", pool_->mutateprob);
-      else if (!strcmp(tokens->lexeme, "op")) {
-        if (pool_->mutate == mutate1)
-          printf("Mutation Operator 1\n");
-        else
-          printf("Mutation Operator 2\n");
-      }
-      else
-        printf ("Expected 'probability' or 'operator', but got %s\n", tokens->lexeme);
-    }
-    else
-      printf ("Expected Attribute Name, but got: %s\n", tokens->lexeme);
-  }
-  else if (!(
-             strcmp(tokens->lexeme, "exit")  &&
-             strcmp(tokens->lexeme, "Q")     &&
-             strcmp(tokens->lexeme, "q")     &&
-             strcmp(tokens->lexeme, "quit")
-             )
-           )
-  {
-    printf("Final:\n");
-    printstatus ();
-    kill(getppid(), SIGQUIT);
-    exit(EXIT_SUCCESS);
-  }
-  else {
-    printf("'%s' not recognized.\n",tokens->lexeme);
-  }
+  else
+    cparse (head);
   freetokens (head);
-  
 exit_:
+  printf("> ");
+  fflush (stdout);
   kill(getppid(), SIGALRM);
 }
 
@@ -601,4 +601,110 @@ void printsolution (pool_s *p, int index)
 inline void printfittest (pool_s *p)
 {
   printsolution (p, POOLSIZE-1);
+}
+
+void cparse (gtoken_s *stream)
+{
+  int result, val;
+  
+  if (
+      !strcmp (stream->lexeme, "exit")  ||
+      !strcmp (stream->lexeme, "quit")  ||
+      !strcmp (stream->lexeme, "Quit")  ||
+      !strcmp (stream->lexeme, "q")     ||
+      !strcmp (stream->lexeme, "Q")
+      )
+  {
+    printf("Final:\n");
+    printstatus ();
+    kill(getppid(), SIGQUIT);
+    exit(EXIT_SUCCESS);
+  }
+  else if (!strcmp(stream->lexeme, "set")) {
+    result = p_mutate (stream->next);
+    val = p_mval (stream->next);
+    if (result == COM_PROB) {
+      if (val < 0)
+        val = 0;
+      else if (val > 100)
+        val = 100;
+      pool_->mutateprob = (uint8_t)val;
+      printf ("Mutation Probability Set to: %d\n", val);
+    }
+    else if (result == COM_OP) {
+      if (val <= 1) {
+        pool_->mutate = mutate1;
+        printf ("Using Mutation Operator 1\n");
+      }
+      else {
+        pool_->mutate = mutate2;
+        printf ("Using Mutation Operator 2\n");
+      }
+    }
+  }
+  else if (!strcmp(stream->lexeme, "get")) {
+    result = p_mutate (stream->next);
+    if (result == COM_PROB)
+      printf ("Current Mutation Probability: %d\n", pool_->mutateprob);
+    else if (result == COM_OP)
+      printf ("Currently Using Mutation Operator: %d\n", (pool_->mutate == mutate1) ? 1 : 2);
+  }
+  else if (!strcmp(stream->lexeme, "show")) {
+    p_show (stream->next);
+  }
+  else if (!strcmp (stream->lexeme, "status")) {
+    printstatus ();
+  }
+  else {
+    printf ("Command Line Error: Unrecognized: '%s'\n", stream->lexeme);
+  }
+}
+
+int p_mutate (gtoken_s *stream)
+{
+  if (!strcmp (stream->lexeme, "mutate"))
+    return p_mutate_ (stream->next);
+  else
+    printf ("Command Line Error: Unrecognized: '%s'\n", stream->lexeme);
+}
+
+int p_mutate_ (gtoken_s *stream)
+{
+  if (!strcmp (stream->lexeme, "prob"))
+    return COM_PROB;
+  else if (!strcmp (stream->lexeme, "op"))
+    return COM_OP;
+  printf ("Command Line Error: Unrecognized: '%s'\n", stream->lexeme);
+  return 0;
+}
+
+int p_mval (gtoken_s *stream)
+{
+  if (stream->type == T_NUM)
+    return atoi (stream->lexeme);
+  else
+    printf ("Expected Number, but got %s\n", stream->lexeme);
+}
+
+void p_show (gtoken_s *stream)
+{
+  if (stream->type == T_NUM) {
+    
+  }
+  else if (!strcmp (stream->lexeme, "best")) {
+    p_feasible (stream->next);
+  }
+  else
+    printf ("Expected number or 'best', but got %s\n", stream->lexeme);
+
+}
+
+void p_feasible (gtoken_s *stream)
+{
+  if (!strcmp (stream->lexeme, "feasible")) {
+    
+  }
+  else if (stream->type != T_EOF) {
+    printf ("Expected 'feasible' or nothing, but got %s\n", stream->lexeme);
+  }
 }

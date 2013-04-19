@@ -5,8 +5,11 @@
 #include <time.h>
 
 #define CBUF_SIZE 32
-#define INITMUTATIONPROB 3
-#define POOLSIZE 50
+#define INITMUTATIONPROB 2
+#define POOLSIZE 40
+#define CRBACKUP1 POOLSIZE
+#define CRBACKUP2 (POOLSIZE+1)
+
 #define PSIZE_ROUL_DIV 5
 
 #if POOLSIZE / PSIZE_ROUL_DIV == 0
@@ -81,7 +84,7 @@ extern void printweights (pool_s *p);
 extern void roulette_sf (pool_s *p, selected_s *parents);
 
 /* Crossover Functions */
-extern void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2);
+extern void singlepoint_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2);
 extern void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2);
 
 

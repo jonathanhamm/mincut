@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define MAPNODE_SIZE 4
 #define CHUNK_SIZE 8
 #define UEOF (unsigned char)EOF
 #define INITBUFSIZE 256
