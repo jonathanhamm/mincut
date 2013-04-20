@@ -541,12 +541,14 @@ void printstatus (void)
 
 }
 
+#define COM_ERR  0
 #define COM_PROB 1
 #define COM_OP   2
+#define COM_X    3
+#define COM_SEL  4
 static void cparse (void);
+static int  p_op (void);
 static int  p_mutate (void);
-static int  p_mutate_ (void);
-static int  p_mval (void);
 static void p_show (void);
 static void p_feasible (void);
 
@@ -616,40 +618,78 @@ void cparse (void)
   }
   else if (!strcmp(stream_->lexeme, "set")) {
     GTNEXT();
-    result = p_mutate ();
-    val = p_mval ();
-    if (result == COM_PROB) {
+    result = p_op ();
+    if (stream_->type == T_NUM) {
+      val = atoi (stream_->lexeme);
       GTNEXT();
-      if (val < 0)
-        val = 0;
-      else if (val > 100)
-        val = 100;
-      pool_->mutateprob = (uint8_t)val;
-      printf ("Mutation Probability Set to: %d\n", val);
-    }
-    else if (result == COM_OP) {
-      GTNEXT();
-      if (val <= 1) {
-        pool_->mutate = mutate1;
-        printf ("Using Mutation Operator 1\n");
+      switch (result) {
+        case COM_OP:
+          if (val <= 1) {
+            pool_->mutate = mutate1;
+            printf("Set to mutate operator 1\n");
+          }
+          else {
+            pool_->mutate = mutate2;
+            printf("Set to mutate operator 2\n");
+          }
+          break;
+        case COM_PROB:
+          if (val < 0) val = 0;
+          else if (val > 100) val = 100;
+          pool_->mutateprob = (uint8_t)val;
+          printf("Set mutate probability to %d\n", val);
+          break;
+        case COM_X:
+          if (val <= 1) {
+            pool_->cross = uniform_cr;
+            printf("Set to use uniform crossover\n");
+          }
+          else {
+            pool_->cross = singlepoint_cr;
+            printf("Set to use single point crossover\n");
+          }
+          break;
+        case COM_SEL:
+          if (val <= 1) {
+            printf("Set to use roulette selection.");
+          }
+          else {
+            printf("Set to use tournament (?) selection\n");
+          }
+          break;
+        default:
+          break;
       }
-      else {
-        pool_->mutate = mutate2;
-        printf ("Using Mutation Operator 2\n");
-      }
     }
+    else
+      printf ("Command Line Error: Expected number, but got '%s'\n", stream_->lexeme);
   }
   else if (!strcmp(stream_->lexeme, "get")) {
     GTNEXT();
-    result = p_mutate ();
-    if (result == COM_PROB) {
-      GTNEXT();
-      printf ("Current Mutation Probability: %d\n", pool_->mutateprob);
+    result = p_op();
+    switch (result) {
+      case COM_OP:
+        if (pool_->mutate == mutate1)
+          printf("Currently using mutation operator 1.\n");
+        else
+          printf("Currently using mutation operator 2.\n");
+        break;
+      case COM_PROB:
+        printf("Current mutation probability is %u%%\n", pool_->mutateprob);
+        break;
+      case COM_X:
+        if (pool_->cross == uniform_cr)
+          printf("Currently using uniform crossover.\n");
+        else
+          printf ("Currently using single point crossover\n");
+        break;
+      case COM_SEL:
+        printf("Too be implemented\n");
+        break;
+      default:
+        break;
     }
-    else if (result == COM_OP) {
-      GTNEXT();
-      printf ("Currently Using Mutation Operator: %d\n", (pool_->mutate == mutate1) ? 1 : 2);
-    }
+
   }
   else if (!strcmp(stream_->lexeme, "show")) {
     GTNEXT();
@@ -659,46 +699,40 @@ void cparse (void)
     GTNEXT();
     printstatus();
   }
-  else {
+  else
     printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
+}
+
+int p_op (void)
+{
+  if (!strcmp(stream_->lexeme, "mutate")) {
+    GTNEXT();
+    return p_mutate();
   }
+  else if (!strcmp(stream_->lexeme, "cross")) {
+    GTNEXT();
+    return COM_X;
+  }
+  else if (!strcmp(stream_->lexeme, "select")) {
+    GTNEXT();
+    return COM_SEL;
+  }
+  printf ("Command Line Error: Expected 'mutate', 'cross', or 'select', but got '%s'.\n", stream_->lexeme);
+  return COM_ERR;
 }
 
 int p_mutate (void)
 {
-  if (!strcmp (stream_->lexeme, "mutate")) {
-    GTNEXT();
-    return p_mutate_ ();
-  }
-  else
-    printf ("Command Line Error: Expected 'mutate' but got: '%s'\n", stream_->lexeme);
-}
-
-int p_mutate_ (void)
-{
-  if (!strcmp (stream_->lexeme, "prob")) {
-    GTNEXT();
-    return COM_PROB;
-  }
-  else if (!strcmp (stream_->lexeme, "op")) {
+  if (!strcmp (stream_->lexeme, "op")) {
     GTNEXT();
     return COM_OP;
   }
-  printf ("Command Line Error: Expected 'prob' or 'op' but got: '%s'\n", stream_->lexeme);
-  return 0;
-}
-
-int p_mval (void)
-{
-  int val;
-  
-  if (stream_->type == T_NUM) {
-    val =  atoi (stream_->lexeme);
+  else if (!strcmp(stream_->lexeme, "prob")) {
     GTNEXT();
-    return val;
+    return COM_PROB;
   }
-  else
-    printf ("Expected number, but got %s\n", stream_->lexeme);
+  printf ("Command Line Error: Expected 'op' or 'prob' but got: '%s'.\n", stream_->lexeme);
+  return COM_ERR;
 }
 
 void p_show (void)
@@ -711,7 +745,7 @@ void p_show (void)
     p_feasible ();
   }
   else
-    printf ("Expected number or 'best', but got %s\n", stream_->lexeme);
+    printf ("Expected number or 'best', but got '%s'.\n", stream_->lexeme);
 
 }
 
@@ -721,6 +755,6 @@ void p_feasible (void)
     GTNEXT();
   }
   else if (stream_->type != T_EOF) {
-    printf ("Expected 'feasible' or nothing, but got %s\n", stream_->lexeme);
+    printf ("Expected 'feasible' or nothing, but got '%s'.\n", stream_->lexeme);
   }
 }
