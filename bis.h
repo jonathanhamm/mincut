@@ -6,7 +6,7 @@
 
 #define CBUF_SIZE 32
 #define INITMUTATIONPROB 2
-#define POOLSIZE 40
+#define POOLSIZE 100
 #define CRBACKUP1 POOLSIZE
 #define CRBACKUP2 (POOLSIZE+1)
 
@@ -33,8 +33,8 @@ typedef struct ppair_s ppair_s;
 
 struct roulette_s
 {
-  float prob;
-  float fitness;
+  double prob;
+  double fitness;
   uint32_t cummulative;
   uint64_t *ptr;
 };
@@ -63,9 +63,9 @@ struct pool_s
   wgraph_s *graph;
   uint64_t start;
   void (*select) (pool_s *, selected_s *);
-  void (*cross) (pool_s *, roulette_s *, roulette_s *);
+  void (*cross) (pool_s *, uint64_t *, uint64_t *, uint64_t *, uint64_t *);
   void (*mutate) (pool_s *, uint64_t *);
-  float fitsum;
+  double fitsum;
   uint32_t accum;
   uint64_t *bestfeasible;
   roulette_s rbuf[POOLSIZE];
@@ -84,8 +84,8 @@ extern void printweights (pool_s *p);
 extern void roulette_sf (pool_s *p, selected_s *parents);
 
 /* Crossover Functions */
-extern void singlepoint_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2);
-extern void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2);
+extern void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
+extern void uniform_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
 
 
 /* Mutation Functions */

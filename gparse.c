@@ -4,7 +4,7 @@
 #include <string.h>  
 
 vhash_s vhash_;
-static gtoken_s *stream_;
+gtoken_s *stream_;
 
 /*reads file into a buffer*/
 static unsigned char *read_gfile(const char *fname);

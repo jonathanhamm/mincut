@@ -27,11 +27,12 @@
 static void sigNOP (int signal) {}
 static void cSIGUSR1 (int signal);
 static void pSIGINT (int signal);
+static void pSIGFPE (int signal);
 
 static pool_s *pool_s_ (wgraph_s *g);
 static void printqword (uint64_t lword, uint8_t mask);
-static float sumweights (pool_s *p, uint64_t *chrom);
-static float getfitness (pool_s *p, uint64_t *chrom);
+static double sumweights (pool_s *p, uint64_t *chrom);
+static double getfitness (pool_s *p, uint64_t *chrom);
 static void computeprob (pool_s *p);
 static int isfeasible (pool_s *p, uint64_t *chrom);
 static void printchrom (pool_s *p, uint64_t *chrom);
@@ -54,7 +55,7 @@ pool_s *pool_s_ (wgraph_s *g)
   pool_s *p;
   uint16_t  i, j;
   uint64_t  *ptr;
-  float sum;
+  double sum;
   
   p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(g->nvert+1) * 8);
   if (!p) {
@@ -71,7 +72,7 @@ pool_s *pool_s_ (wgraph_s *g)
         p->cmask |= (1llu << i);
   }
   p->select = roulette_sf;
-  p->cross = singlepoint_cr;
+  p->cross = uniform_cr;
   p->mutate = mutate1;
   p->gen = 0;
   ptr = p->popul;
@@ -96,7 +97,7 @@ pool_s *pool_s_ (wgraph_s *g)
     p->rbuf[i].prob = sum / p->rbuf[i].fitness;
   qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
   for (i = 0; i < POOLSIZE; i++) {
-    p->accum += p->rbuf[i].prob;
+    p->accum += (int)p->rbuf[i].prob;
     p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
     if (i)
       p->rbuf[i].cummulative += p->rbuf[i-1].cummulative;
@@ -210,7 +211,7 @@ int iscut(pool_s *p, uint64_t *chrom, vertex_s *v)
   return 0;
 }
 
-float sumweights (pool_s *p, uint64_t *chrom)
+double sumweights (pool_s *p, uint64_t *chrom)
 {
   uint8_t pos;
   uint16_t i, j, csize, nedges;
@@ -218,7 +219,7 @@ float sumweights (pool_s *p, uint64_t *chrom)
            *ptr;
   vertex_s *v;
   edge_s **edges;
-  float weight;
+  double weight;
 
   for (weight = 0, i = 0, ptr = chrom; i < p->chromsize; i++, ptr++) {
     if (i == p->chromsize-1 && p->remain)
@@ -255,7 +256,7 @@ void printweights (pool_s *p)
   }
 }
 
-float getfitness (pool_s *p, uint64_t *chrom)
+double getfitness (pool_s *p, uint64_t *chrom)
 {
   int setcount, differ;
   
@@ -268,17 +269,19 @@ void computeprob (pool_s *p)
 {
   uint16_t i, n;
   uint64_t *ptr;
-  float sum, fc1, fc2;
+  double sum, fc1, fc2;
   
   sum = p->fitsum;
-  for (i = 0, p->accum = 0; i < POOLSIZE; i++)
-    p->rbuf[i].prob = sum / p->rbuf[i].fitness;
-  qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
   for (i = 0; i < POOLSIZE; i++) {
+    //printf("Assigning: %f, %f\n", sum, p->rbuf[i].fitness);
+    p->rbuf[i].prob = sum / p->rbuf[i].fitness;
+  }
+  qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
+  for (i = 0, p->accum = 0; i < POOLSIZE; i++) {
     p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
     if (i)
       p->rbuf[i].cummulative += p->rbuf[i-1].cummulative;
-    p->accum += p->rbuf[i].prob;
+    p->accum += (int)p->rbuf[i].prob;
   }
   if (isfeasible(p, p->rbuf[POOLSIZE-1].ptr))
     p->bestfeasible = p->rbuf[POOLSIZE-1].ptr;
@@ -307,35 +310,15 @@ void setbit (uint64_t *chrom, uint16_t pos, int val)
 }
 
 #define TESTCROSSOVER_ 
-#undef TESTCROSSOVER_
+//#undef TESTCROSSOVER_
 
-void singlepoint_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
+void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
 {
   int i, pindex;
   uint16_t point, inv;
   uint64_t mask;
-  uint64_t *backup1, *backup2, *p1, *p2,
-           *dst1, *dst2;
+  uint64_t *backup1, *backup2;
   
-  p1 = rp1->ptr;
-  p2 = rp2->ptr;
-  if (rp1->ptr == p->bestfeasible) {
-    rp1 = &p->rbuf[0];
-    dst1 = rp1->ptr;
-  }
-  else
-    dst1 = p1;
-  if (rp2->ptr == p->bestfeasible) {
-    rp2 = &p->rbuf[0];
-    dst2 = rp2->ptr;
-  }
-  else
-    dst2 = p2;
-  if (dst1 == dst2) {
-    rp2 = &p->rbuf[1%POOLSIZE];
-    dst2 = rp2->ptr;
-  }
-  p->fitsum -= (rp1->fitness + rp2->fitness);
 #ifdef TESTCROSSOVER_
   printf ("parents: \n");
   printchrom(p, p1);
@@ -373,9 +356,6 @@ void singlepoint_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
   printchrom(p, dst2);
   printf("\n\n");
 #endif
-  rp1->fitness = getfitness (p, dst1);
-  rp2->fitness = getfitness (p, dst2);
-  p->fitsum += (rp1->fitness + rp2->fitness);
 }
 
 
@@ -401,32 +381,11 @@ void singlepoint_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
  
  Uniform Crossover
 */
-void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
+void uniform_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
 {
   uint16_t i;
-  uint64_t  mask,  backup,
-            *dst1,  *dst2,
-            *p1,    *p2;
-  
-  p1 = rp1->ptr;
-  p2 = rp2->ptr;
-  if (rp1->ptr == p->bestfeasible) {
-    rp1 = &p->rbuf[0];
-    dst1 = rp1->ptr;
-  }
-  else
-    dst1 = p1;
-  if (rp2->ptr == p->bestfeasible) {
-    rp2 = &p->rbuf[0];
-    dst2 = rp2->ptr;
-  }
-  else
-    dst2 = p2;
-  if (dst1 == dst2) {
-    rp2 = &p->rbuf[1%POOLSIZE];
-    dst2 = rp2->ptr;
-  }
-  p->fitsum -= (rp1->fitness + rp2->fitness);
+  uint64_t  mask,  backup;
+
   for (i = 0; i < p->chromsize; i++) {
     ((uint16_t *)&mask)[0] = (uint16_t)rand();
     ((uint16_t *)&mask)[1] = (uint16_t)rand();
@@ -436,13 +395,6 @@ void uniform_cr (pool_s *p, roulette_s *rp1, roulette_s *rp2)
     dst1[i] = (~mask & backup) | (mask & p2[i]);
     dst2[i] = (mask & backup) | (~mask & p2[i]);
   }
-  if (rand() % 100 < p->mutateprob) {
-    p->mutate (p, dst1);
-    p->mutate (p, dst2);
-  }
-  rp1->fitness = getfitness (p, dst1);
-  rp2->fitness = getfitness (p, dst2);
-  p->fitsum += (rp1->fitness + rp2->fitness);
 }
 
 void mutate1 (pool_s *p, uint64_t *victim)
@@ -475,6 +427,9 @@ int run_ge (wgraph_s *g)
   int i;
   uint16_t n, index;
   selected_s parents;
+  uint64_t *p1, *p2;
+  uint64_t *dst1, *dst2;
+  roulette_s *rp1, *rp2, *rpt;
   unsigned char cbuf[CBUF_SIZE];
   
   if (signal(SIGINT, pSIGINT) == SIG_ERR)
@@ -503,7 +458,6 @@ int run_ge (wgraph_s *g)
       write(pipe_[1], cbuf, CBUF_SIZE);
       kill (pid_, SIGUSR1);
       pause ();
-      
     }
   }
   else {
@@ -511,12 +465,48 @@ int run_ge (wgraph_s *g)
       THROW_EXCEPTION();
     if (signal(SIGINT, sigNOP) == SIG_ERR)
       THROW_EXCEPTION();
+    signal(SIGQUIT, pSIGFPE);
     n = p->chromsize;
     p->start = clock();
     while (1) {
       p->select (p, &parents);
-      for (i = 0; i < NSELECT; i++)
-        p->cross (p, parents.couples[i].p1, parents.couples[i].p2);
+      for (i = 0; i < NSELECT; i++) {
+        rp1 = parents.couples[i].p1;
+        rp2 = parents.couples[i].p2;
+        p1  = rp1->ptr;
+        p2  = rp2->ptr;
+        if (rp1->ptr == p->bestfeasible) {
+          rp1 = &p->rbuf[0];
+          dst1 = rp1->ptr;
+        }
+        else
+          dst1 = p1;
+        if (rp2->ptr == p->bestfeasible) {
+          rp2 = &p->rbuf[0];
+          dst2 = rp2->ptr;
+        }
+        else
+          dst2 = p2;
+        if (dst1 == dst2) {
+          for (rpt = &p->rbuf[rand()%POOLSIZE];
+               rpt->ptr == p->bestfeasible ||
+               rpt->ptr == dst1 ||
+               rpt->ptr == dst2
+               ;rpt = &p->rbuf[rand()%POOLSIZE]);
+          rp2 = rpt;
+          dst2 = rpt->ptr;
+        }
+        p->fitsum -= (rp1->fitness + rp2->fitness);
+        p->cross (p, p1, p2, dst1, dst2);
+        if (rand() % 100 < p->mutateprob) {
+          p->mutate (p, dst1);
+          p->mutate (p, dst2);
+        }
+        rp1->fitness = getfitness (p, dst1);
+        rp2->fitness = getfitness (p, dst2);
+        p->fitsum += (rp1->fitness + rp2->fitness);
+
+      }
       computeprob(p);
       ++p->gen;
     }
@@ -553,13 +543,12 @@ void printstatus (void)
 
 #define COM_PROB 1
 #define COM_OP   2
-static void cparse (gtoken_s *stream);
-static int  p_mutate (gtoken_s *stream);
-static int  p_mutate_ (gtoken_s *stream);
-static int  p_mval (gtoken_s *stream);
-static void p_show (gtoken_s *stream);
-static void p_feasible (gtoken_s *stream);
-
+static void cparse (void);
+static int  p_mutate (void);
+static int  p_mutate_ (void);
+static int  p_mval (void);
+static void p_show (void);
+static void p_feasible (void);
 
 void cSIGUSR1 (int signal)
 {
@@ -574,8 +563,8 @@ void cSIGUSR1 (int signal)
     goto exit_;
   }
   else
-    cparse (head);
-  freetokens (head);
+    cparse ();
+  freetokens (stream_);
 exit_:
   printf("> ");
   fflush (stdout);
@@ -593,6 +582,11 @@ void pSIGINT (int signal)
   pause();
 }
 
+void pSIGFPE (int signal)
+{
+  kill (getppid(), SIGSEGV);
+}
+
 void printsolution (pool_s *p, int index)
 {
   
@@ -603,16 +597,16 @@ inline void printfittest (pool_s *p)
   printsolution (p, POOLSIZE-1);
 }
 
-void cparse (gtoken_s *stream)
+void cparse (void)
 {
   int result, val;
   
   if (
-      !strcmp (stream->lexeme, "exit")  ||
-      !strcmp (stream->lexeme, "quit")  ||
-      !strcmp (stream->lexeme, "Quit")  ||
-      !strcmp (stream->lexeme, "q")     ||
-      !strcmp (stream->lexeme, "Q")
+      !strcmp (stream_->lexeme, "exit")  ||
+      !strcmp (stream_->lexeme, "quit")  ||
+      !strcmp (stream_->lexeme, "Quit")  ||
+      !strcmp (stream_->lexeme, "q")     ||
+      !strcmp (stream_->lexeme, "Q")
       )
   {
     printf("Final:\n");
@@ -620,10 +614,12 @@ void cparse (gtoken_s *stream)
     kill(getppid(), SIGQUIT);
     exit(EXIT_SUCCESS);
   }
-  else if (!strcmp(stream->lexeme, "set")) {
-    result = p_mutate (stream->next);
-    val = p_mval (stream->next);
+  else if (!strcmp(stream_->lexeme, "set")) {
+    GTNEXT();
+    result = p_mutate ();
+    val = p_mval ();
     if (result == COM_PROB) {
+      GTNEXT();
       if (val < 0)
         val = 0;
       else if (val > 100)
@@ -632,6 +628,7 @@ void cparse (gtoken_s *stream)
       printf ("Mutation Probability Set to: %d\n", val);
     }
     else if (result == COM_OP) {
+      GTNEXT();
       if (val <= 1) {
         pool_->mutate = mutate1;
         printf ("Using Mutation Operator 1\n");
@@ -642,69 +639,88 @@ void cparse (gtoken_s *stream)
       }
     }
   }
-  else if (!strcmp(stream->lexeme, "get")) {
-    result = p_mutate (stream->next);
-    if (result == COM_PROB)
+  else if (!strcmp(stream_->lexeme, "get")) {
+    GTNEXT();
+    result = p_mutate ();
+    if (result == COM_PROB) {
+      GTNEXT();
       printf ("Current Mutation Probability: %d\n", pool_->mutateprob);
-    else if (result == COM_OP)
+    }
+    else if (result == COM_OP) {
+      GTNEXT();
       printf ("Currently Using Mutation Operator: %d\n", (pool_->mutate == mutate1) ? 1 : 2);
+    }
   }
-  else if (!strcmp(stream->lexeme, "show")) {
-    p_show (stream->next);
+  else if (!strcmp(stream_->lexeme, "show")) {
+    GTNEXT();
+    p_show();
   }
-  else if (!strcmp (stream->lexeme, "status")) {
-    printstatus ();
+  else if (!strcmp (stream_->lexeme, "status")) {
+    GTNEXT();
+    printstatus();
   }
   else {
-    printf ("Command Line Error: Unrecognized: '%s'\n", stream->lexeme);
+    printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
   }
 }
 
-int p_mutate (gtoken_s *stream)
+int p_mutate (void)
 {
-  if (!strcmp (stream->lexeme, "mutate"))
-    return p_mutate_ (stream->next);
+  if (!strcmp (stream_->lexeme, "mutate")) {
+    GTNEXT();
+    return p_mutate_ ();
+  }
   else
-    printf ("Command Line Error: Unrecognized: '%s'\n", stream->lexeme);
+    printf ("Command Line Error: Expected 'mutate' but got: '%s'\n", stream_->lexeme);
 }
 
-int p_mutate_ (gtoken_s *stream)
+int p_mutate_ (void)
 {
-  if (!strcmp (stream->lexeme, "prob"))
+  if (!strcmp (stream_->lexeme, "prob")) {
+    GTNEXT();
     return COM_PROB;
-  else if (!strcmp (stream->lexeme, "op"))
+  }
+  else if (!strcmp (stream_->lexeme, "op")) {
+    GTNEXT();
     return COM_OP;
-  printf ("Command Line Error: Unrecognized: '%s'\n", stream->lexeme);
+  }
+  printf ("Command Line Error: Expected 'prob' or 'op' but got: '%s'\n", stream_->lexeme);
   return 0;
 }
 
-int p_mval (gtoken_s *stream)
+int p_mval (void)
 {
-  if (stream->type == T_NUM)
-    return atoi (stream->lexeme);
-  else
-    printf ("Expected Number, but got %s\n", stream->lexeme);
-}
-
-void p_show (gtoken_s *stream)
-{
-  if (stream->type == T_NUM) {
-    
-  }
-  else if (!strcmp (stream->lexeme, "best")) {
-    p_feasible (stream->next);
+  int val;
+  
+  if (stream_->type == T_NUM) {
+    val =  atoi (stream_->lexeme);
+    GTNEXT();
+    return val;
   }
   else
-    printf ("Expected number or 'best', but got %s\n", stream->lexeme);
+    printf ("Expected number, but got %s\n", stream_->lexeme);
+}
+
+void p_show (void)
+{
+  if (stream_->type == T_NUM) {
+    GTNEXT();
+  }
+  else if (!strcmp (stream_->lexeme, "best")) {
+    GTNEXT();
+    p_feasible ();
+  }
+  else
+    printf ("Expected number or 'best', but got %s\n", stream_->lexeme);
 
 }
 
-void p_feasible (gtoken_s *stream)
+void p_feasible (void)
 {
-  if (!strcmp (stream->lexeme, "feasible")) {
-    
+  if (!strcmp (stream_->lexeme, "feasible")) {
+    GTNEXT();
   }
-  else if (stream->type != T_EOF) {
-    printf ("Expected 'feasible' or nothing, but got %s\n", stream->lexeme);
+  else if (stream_->type != T_EOF) {
+    printf ("Expected 'feasible' or nothing, but got %s\n", stream_->lexeme);
   }
 }

@@ -83,6 +83,7 @@ struct vhash_s
 };
 
 extern vhash_s vhash_;
+extern gtoken_s *stream_;
 
 extern gtoken_s *lex_ (unsigned char *buf);
 extern void freetokens (gtoken_s *list);
