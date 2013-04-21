@@ -76,6 +76,7 @@ struct pool_s
   uint64_t popul[0];
 };
 
+extern pool_s *pool_;
 
 /*ge routines*/
 extern void printpool (pool_s *p);

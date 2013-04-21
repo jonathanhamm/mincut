@@ -1,3 +1,16 @@
+/*
+ gparse.h
+ Author: Jonathan Hamm
+  
+ Description:
+ 
+ This library is exclusively for routines that read and parse data so the genetic algorithm 
+ can use it. This contains functions for file io, parsing graph data, and parsing command line 
+ data. Command line data are commands sent to the GA during runtime from the terminal. These 
+ are mostly for printing results and setting parameters while the algorithm is running. This 
+ also contains functions for creating the graph data structure used by the GA. 
+ */
+
 #ifndef _GPARSE_H_
 #define _GPARSE_H_
 
@@ -98,11 +111,11 @@ extern vertex_s *vertex_s_ (gtoken_s *tok);
 extern int addedge (vertex_s *v, edge_s *e);
 extern edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
 extern int insert_vertex (wgraph_s *graph, vertex_s *v);
-
-
 extern int vhashinsert (vertex_s *v, uint16_t index);
 extern uint16_t vgetindex (vertex_s *v);
-
 extern void printgraph (wgraph_s *g);
+
+extern void cparse (void);
+
 
 #endif

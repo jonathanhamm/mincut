@@ -47,7 +47,7 @@ static void printchrom (pool_s *p, uint64_t *chrom);
 
 static pid_t pid_;
 static int pipe_[2];
-static pool_s *pool_;
+pool_s *pool_;
 
 int prcmp (roulette_s *a, roulette_s *b)
 {
@@ -479,7 +479,7 @@ int run_ge (wgraph_s *g)
     THROW_EXCEPTION();
   pid_ = fork();
   if (pid_) {
-    printf ("Now running program.\n> ");
+    printf ("Now running program with chromosome size: %d\n> ", GET_CHBITLEN(p));
     cbuf[CBUF_SIZE-1] = UEOF;
     while (1) {
       index = 0;
@@ -576,16 +576,6 @@ void printstatus (void)
 
 }
 
-#define COM_ERR  0
-#define COM_PROB 1
-#define COM_OP   2
-#define COM_X    3
-#define COM_SEL  4
-static void cparse (void);
-static int  p_op (void);
-static int  p_mutate (void);
-static void p_show (void);
-static int p_feasible (void);
 
 void cSIGUSR1 (int signal)
 {
@@ -693,198 +683,8 @@ void printsolution (pool_s *p, int index)
   }
   printf ("\nV1 = ");
   print_solset (v1);
-  printf ("\nLength = %d\n", v1size);
+  printf ("Length = %d\n\n", v1size);
   printf ("V2 = ");
   print_solset (v2);
-  printf ("\nLength = %d\n", v2size);
-}
-
-void cparse (void)
-{
-  int result, val;
-  
-  if (
-      !strcmp (stream_->lexeme, "exit")  ||
-      !strcmp (stream_->lexeme, "quit")  ||
-      !strcmp (stream_->lexeme, "Quit")  ||
-      !strcmp (stream_->lexeme, "q")     ||
-      !strcmp (stream_->lexeme, "Q")
-      )
-  {
-    printf("Final:\n");
-    printstatus ();
-    kill(getppid(), SIGQUIT);
-    exit(EXIT_SUCCESS);
-  }
-  else if (!strcmp(stream_->lexeme, "set")) {
-    GTNEXT();
-    result = p_op ();
-    if (stream_->type == T_NUM) {
-      val = atoi (stream_->lexeme);
-      GTNEXT();
-      switch (result) {
-        case COM_OP:
-          if (val <= 1) {
-            pool_->mutate = mutate1;
-            printf("Mutate operator now set to: 1\n");
-          }
-          else {
-            pool_->mutate = mutate2;
-            printf("Mutate operator now set to: 2\n");
-          }
-          break;
-        case COM_PROB:
-          if (val < 0) val = 0;
-          else if (val > 100) val = 100;
-          pool_->mutateprob = (uint8_t)val;
-          printf("Mutate probability now set to %d\n", val);
-          break;
-        case COM_X:
-          if (val <= 1) {
-            pool_->cross = uniform_cr;
-            printf("Now using uniform crossover\n");
-          }
-          else {
-            pool_->cross = npoint_cr;
-            printf("Now using n-point crossover, n = %d\n", CR_N);
-          }
-          break;
-        case COM_SEL:
-          if (val <= 1) {
-            pool_->select = roulette_sf;
-            printf("Now using roulette selection.");
-          }
-          else if (val == 2) {
-            pool_->select = rank_sf;
-            printf("Now using rank selection\n");
-          }
-          else {
-            pool_->select = tournament_sf;
-            printf("Now using tournament selection\n");
-          }
-          break;
-        default:
-          break;
-      }
-    }
-    else
-      printf ("Command Line Error: Expected number, but got '%s'\n", stream_->lexeme);
-  }
-  else if (!strcmp(stream_->lexeme, "get")) {
-    GTNEXT();
-    result = p_op();
-    switch (result) {
-      case COM_OP:
-        if (pool_->mutate == mutate1)
-          printf("Currently using mutation operator 1.\n");
-        else
-          printf("Currently using mutation operator 2.\n");
-        break;
-      case COM_PROB:
-        printf("Current mutation probability is %u%%\n", pool_->mutateprob);
-        break;
-      case COM_X:
-        if (pool_->cross == uniform_cr)
-          printf("Currently using uniform crossover.\n");
-        else
-          printf ("Currently using n-point crossover, n = %d\n", CR_N);
-        break;
-      case COM_SEL:
-        if (pool_->select == roulette_sf)
-          printf("Currently using roulette selection.\n");
-        else if (pool_->select == rank_sf)
-          printf("Currently using rank selection.\n");
-        else
-          printf("Currently using tournament selection.\n");
-        break;
-      default:
-        break;
-    }
-
-  }
-  else if (!strcmp(stream_->lexeme, "show")) {
-    GTNEXT();
-    p_show();
-  }
-  else if (!strcmp (stream_->lexeme, "status")) {
-    GTNEXT();
-    printstatus();
-  }
-  else
-    printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
-}
-
-int p_op (void)
-{
-  if (!strcmp(stream_->lexeme, "mutate")) {
-    GTNEXT();
-    return p_mutate();
-  }
-  else if (!strcmp(stream_->lexeme, "cross")) {
-    GTNEXT();
-    return COM_X;
-  }
-  else if (!strcmp(stream_->lexeme, "select")) {
-    GTNEXT();
-    return COM_SEL;
-  }
-  printf ("Command Line Error: Expected 'mutate', 'cross', or 'select', but got '%s'.\n", stream_->lexeme);
-  return COM_ERR;
-}
-
-int p_mutate (void)
-{
-  if (!strcmp (stream_->lexeme, "op")) {
-    GTNEXT();
-    return COM_OP;
-  }
-  else if (!strcmp(stream_->lexeme, "prob")) {
-    GTNEXT();
-    return COM_PROB;
-  }
-  printf ("Command Line Error: Expected 'op' or 'prob' but got: '%s'.\n", stream_->lexeme);
-  return COM_ERR;
-}
-
-void p_show (void)
-{
-  int result, index;
-  
-  if (stream_->type == T_NUM) {
-    index = atoi(stream_->lexeme);
-    GTNEXT();
-    if (index <= 0 || index > POOLSIZE)
-      printf ("Value %d out of range. Range is 1 to %d.\n", index, POOLSIZE);
-    else
-      printsolution(pool_, --index);
-  }
-  else if (!strcmp (stream_->lexeme, "best")) {
-    GTNEXT();
-    result = p_feasible ();
-    if (!result)
-      printsolution (pool_, POOLSIZE-1);
-    else if (result == 1) {
-      for (index = POOLSIZE-1; index >= 0
-          && pool_->rbuf[index].ptr != pool_->bestfeasible; index--);
-      printsolution (pool_, index);
-    }
-
-  }
-  else
-    printf ("Expected number or 'best', but got '%s'.\n", stream_->lexeme);
-}
-
-int p_feasible (void)
-{
-  int index;
-  
-  if (!strcmp (stream_->lexeme, "feasible")) {
-    GTNEXT();
-    return 1;
-  }
-  else if (stream_->type != T_EOF) {
-    printf ("Expected 'feasible' or nothing, but got '%s'.\n", stream_->lexeme);
-    return -1;
-  }
-  return 0;
+  printf ("Length = %d\n", v2size);
 }
