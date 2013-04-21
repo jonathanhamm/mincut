@@ -26,6 +26,7 @@
 #define CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0)) 
 
 typedef struct pool_s pool_s;
+typedef struct simulanneal_s simulanneal_s;
 
 /*Chromosomes are Little Endian, and Packed into a 64-bit alligned buffer*/
 typedef struct roulette_s roulette_s;
@@ -64,9 +65,9 @@ struct pool_s
   uint8_t mutateprob;
   wgraph_s *graph;
   uint64_t start;
-  void (*select) (pool_s *, selected_s *);
-  void (*cross) (pool_s *, uint64_t *, uint64_t *, uint64_t *, uint64_t *);
-  void (*mutate) (pool_s *, uint64_t *);
+  void (*select) (selected_s *);
+  void (*cross) (uint64_t *, uint64_t *, uint64_t *, uint64_t *);
+  void (*mutate) (uint64_t *);
   double fitsum;
   uint16_t ranksum;
   uint32_t accum;
@@ -76,30 +77,40 @@ struct pool_s
   uint64_t popul[0];
 };
 
-extern pool_s *pool_;
+struct simulanneal_s
+{
+  void (*perturb) (void);
+  uint64_t solution[0];
+};
 
-/*ge routines*/
-extern void printpool (pool_s *p);
+extern pool_s *pool_;
+extern simulanneal_s *simul;
+
+/*Genetic Algorithm routines*/
+extern void printpool (void);
 extern int run_ge (wgraph_s *g);
 
-extern int countdigits(pool_s *p, uint64_t *cptr);
-extern void printweights (pool_s *p);
+extern int countdigits(uint64_t *cptr);
+extern void printweights (void);
 
 /* Selection Functions */
-extern void roulette_sf (pool_s *p, selected_s *parents);
-extern void rank_sf (pool_s *p, selected_s *parents);
-extern void tournament_sf (pool_s *p, selected_s *parents);
+extern void roulette_sf (selected_s *parents);
+extern void rank_sf (selected_s *parents);
+extern void tournament_sf (selected_s *parents);
 
 
 /* Crossover Functions */
-extern void npoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
-extern void uniform_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
+extern void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
+extern void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
+
 
 
 /* Mutation Functions */
-extern void mutate1 (pool_s *p, uint64_t *victim);
-extern void mutate2 (pool_s *p, uint64_t *victim);
+extern void mutate1 (uint64_t *victim);
+extern void mutate2 (uint64_t *victim);
 
-extern void buildgraph (pool_s *p);
+extern void printsolution (int index);
+
+/*simulated annealing functions*/
 
 #endif

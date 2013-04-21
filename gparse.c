@@ -4,11 +4,12 @@
 #include <stdlib.h>
 #include <string.h>  
 
-#define COM_ERR  0
-#define COM_PROB 1
-#define COM_OP   2
-#define COM_X    3
-#define COM_SEL  4
+#define COM_ERR   0
+#define COM_PROB  1
+#define COM_OP    2
+#define COM_X     3
+#define COM_SEL   4
+#define COM_K     5
 
 vhash_s vhash_;
 gtoken_s *stream_;
@@ -536,6 +537,10 @@ void cparse (void)
             printf("Now using tournament selection\n");
           }
           break;
+        case COM_K:
+          pool_->k = (uint8_t)val;
+          printf ("Now using k value (for tournament selction): %d.\n", val);
+          break;
         default:
           break;
       }
@@ -570,6 +575,9 @@ void cparse (void)
         else
           printf("Currently using tournament selection.\n");
         break;
+      case COM_K:
+        printf("Current k value (for tournament selection): %d.\n", pool_->k);
+        break;
       default:
         break;
     }
@@ -601,7 +609,11 @@ int p_op (void)
     GTNEXT();
     return COM_SEL;
   }
-  printf ("Command Line Error: Expected 'mutate', 'cross', or 'select', but got '%s'.\n", stream_->lexeme);
+  else if (!strcmp(stream_->lexeme, "k")) {
+    GTNEXT();
+    return COM_K;
+  }
+  printf ("Command Line Error: Expected 'mutate', 'cross', 'select', or 'k' but got '%s'.\n", stream_->lexeme);
   return COM_ERR;
 }
 
@@ -629,17 +641,17 @@ void p_show (void)
     if (index <= 0 || index > POOLSIZE)
       printf ("Value %d out of range. Range is 1 to %d.\n", index, POOLSIZE);
     else
-      printsolution(pool_, --index);
+      printsolution(--index);
   }
   else if (!strcmp (stream_->lexeme, "best")) {
     GTNEXT();
     result = p_feasible ();
     if (!result)
-      printsolution (pool_, POOLSIZE-1);
+      printsolution (POOLSIZE-1);
     else if (result == 1) {
       for (index = POOLSIZE-1; index >= 0
            && pool_->rbuf[index].ptr != pool_->bestfeasible; index--);
-      printsolution (pool_, index);
+      printsolution (index);
     }
     
   }
