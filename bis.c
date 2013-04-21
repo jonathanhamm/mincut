@@ -595,14 +595,12 @@ void cSIGUSR1 (int signal)
   
   read(pipe_[0], cbuf, CBUF_SIZE);
   head = lex_ (cbuf);
-  if (!head) {
+  if (!head)
     printf ("Illegal Symbols Used\n");
-    goto exit_;
-  }
-  else
+  else {
     cparse ();
-  freetokens (stream_);
-exit_:
+    freetokens (stream_);
+  }
   printf("> ");
   fflush (stdout);
   kill(getppid(), SIGALRM);
