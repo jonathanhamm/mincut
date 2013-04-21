@@ -99,7 +99,7 @@ int vhashinsert (vertex_s *v, uint16_t index)
   if (vhash_.table[i].isoccupied) {
     ptr = malloc (sizeof(*ptr));
     if (!ptr) {
-      perror("Malloc Error");
+      perror("Heap Allocation Error");
       exit(EXIT_FAILURE);
     }
     ptr->v = v;
@@ -236,7 +236,7 @@ gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
   
   tok = calloc(1,sizeof(*tok));
   if (!tok) {
-    perror ("Malloc Error");
+    perror ("Heap Allocation Error");
     exit(EXIT_FAILURE);
   }
   tok->type = type;
@@ -265,7 +265,7 @@ wgraph_s *parse_ (void)
   
   g = wgraph_s_();
   if (!g) {
-    perror("MALLOC ERROR");
+    perror("Heap Allocation Error");
     exit(EXIT_FAILURE);
   }
   pgraph_(g);
@@ -381,7 +381,7 @@ vertex_s *vertex_s_ (gtoken_s *tok)
   
   v = calloc(1, sizeof(*v));
   if (!v) {
-    perror ("Malloc Error");
+    perror ("Heap Allocation Error");
     exit(EXIT_FAILURE);
   }
   IDCPY (v->name, tok->lexeme);
@@ -395,7 +395,7 @@ int addedge (vertex_s *v, edge_s *e)
   else
     v->edges = malloc(sizeof(*v->edges));
   if (!v->edges) {
-    perror("Malloc Error");
+    perror("Heap Allocation Error");
     exit(EXIT_FAILURE);
   }
   v->edges[v->nedges] = e;
@@ -418,7 +418,7 @@ edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
   return edge;
 
 exception_:
-  perror("Malloc Error");
+  perror("Heap Allocation Error");
   exit(EXIT_FAILURE);
 }
 
@@ -447,7 +447,7 @@ int insert_vertex (wgraph_s *graph, vertex_s *v)
   return 1;
 
 exception_:
-  perror("Malloc Error");
+  perror("Heap Allocation Error");
   exit(EXIT_FAILURE);
 }
 

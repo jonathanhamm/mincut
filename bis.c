@@ -67,7 +67,7 @@ pool_s *pool_s_ (wgraph_s *g)
   
   p = calloc(1, sizeof(*p) + POOLSIZE * CQWORDSIZE(g->nvert+1) * 8);
   if (!p) {
-    perror ("Malloc Error");
+    perror ("Heap Allocation Error");
     exit (EXIT_FAILURE);
   }
   pool_ = p;
@@ -141,13 +141,13 @@ void printchrom (pool_s *p, uint64_t *chrom)
 
 void printpool (pool_s *p)
 {
-  uint16_t i, n, index;
+  uint16_t i, n;
   uint64_t *ptr;
   
   n = p->chromsize;
   ptr = p->popul;
-  for (index = 0; index < POOLSIZE; index++) {
-    printf("%d:\t", index);
+  for (i = 0; i < POOLSIZE; i++) {
+    printf("%d:\t", i);
     printchrom (p, ptr);
     printf("  %f, %d, %d", getfitness (p, ptr), ((uint8_t *)ptr)[7] >> (8 - GET_CHBITLEN(p)), isfeasible (p, ptr));
     printf("\n");
@@ -171,8 +171,7 @@ int countdigits (pool_s *p, uint64_t *cptr)
 
 int iscut(pool_s *p, uint64_t *chrom, vertex_s *v)
 {
-  uint16_t i, j, nvert;
-  uint64_t iter;
+  uint16_t i, nvert;
   vertex_s **vtable;
   
   nvert = p->graph->nvert;
@@ -618,7 +617,7 @@ void insert_solset (solset_s **sset, vertex_s *v)
   
   tmp = malloc (sizeof(*tmp));
   if (!tmp) {
-    perror("Malloc Error\n");
+    perror("Heap Allocation Error");
     exit(EXIT_FAILURE);
   }
   tmp->v = v;
