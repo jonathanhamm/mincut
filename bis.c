@@ -23,6 +23,14 @@
 + (((lw & 0xfff000) >> 12) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f \
 + ((lw >> 24) * 0x1001001001001ULL & 0x84210842108421ULL) % 0x1f
 
+typedef struct solset_s solset_s;
+
+struct solset_s
+{
+  vertex_s *v;
+  solset_s *next;
+};
+
 /* Signal Handlers */
 static void sigNOP (int signal) {}
 static void cSIGUSR1 (int signal);
@@ -225,7 +233,7 @@ double getfitness (pool_s *p, uint64_t *chrom)
   int setcount, differ;
   
   setcount = countdigits (p, chrom);
-  differ = abs(2*setcount-GET_CHBITLEN(p));
+  differ = abs(2*setcount - GET_CHBITLEN(p));
   return sumweights (p, chrom) + (differ << 4);
 }
 
@@ -254,12 +262,12 @@ int isfeasible (pool_s *p, uint64_t *chrom)
     return  (2 * countdigits (p, chrom) == GET_CHBITLEN(p));
 }
 
-int getbit (uint64_t *chrom, uint16_t pos)
+uint8_t getbit (uint64_t *chrom, uint16_t pos)
 {
   return (chrom[pos / 64] >> (pos % 64)) & 1llu;
 }
 
-void setbit (uint64_t *chrom, uint16_t pos, int val)
+void setbit (uint64_t *chrom, uint16_t pos, uint8_t val)
 {
   chrom[pos / 64] &= ~(1llu << (pos % 64));
   if (val)
@@ -326,9 +334,9 @@ void rank_sf (pool_s *p, selected_s *parents)
 void tournament_sf (pool_s *p, selected_s *parents)
 {
   int       i;
+  uint8_t   k, R;
   uint32_t  i1a, i1b,
             i2a, i2b;
-  uint8_t   k, R;
   
   for (i = 0, k = p->k; i < NSELECT; i++) {
     i1a = rand() % POOLSIZE;
@@ -577,7 +585,7 @@ static void cparse (void);
 static int  p_op (void);
 static int  p_mutate (void);
 static void p_show (void);
-static void p_feasible (void);
+static int p_feasible (void);
 
 void cSIGUSR1 (int signal)
 {
@@ -616,14 +624,81 @@ void pSIGFPE (int signal)
   kill (getppid(), SIGSEGV);
 }
 
-void printsolution (pool_s *p, int index)
+void insert_solset (solset_s **sset, vertex_s *v)
 {
+  solset_s *tmp;
   
+  tmp = malloc (sizeof(*tmp));
+  if (!tmp) {
+    perror("Malloc Error\n");
+    exit(EXIT_FAILURE);
+  }
+  tmp->v = v;
+  if (!*sset) {
+    tmp->next = NULL;
+    *sset = tmp;
+  }
+  else {
+    tmp->next = *sset;
+    *sset = tmp;
+  }
 }
 
-inline void printfittest (pool_s *p)
+void print_solset (solset_s *solset)
 {
-  printsolution (p, POOLSIZE-1);
+  int i;
+  solset_s *iter, *tmp;
+  printf("\n{");
+  for (iter = solset, tmp = iter, i = 0; iter; tmp = iter, i++) {
+    if (iter->next) {
+      if (!(i % 8) && iter->next)
+        printf("\n\t");
+      printf ("%s,\t", iter->v->name);
+    }
+    else {
+      if (!(i % 8))
+        printf("\n\t");
+      printf ("%s\t", iter->v->name);
+    }
+    iter = iter->next;
+    free(tmp);
+  }
+  printf("\n}\n");
+}
+
+void printsolution (pool_s *p, int index)
+{
+  int       i;
+  float     fitness;
+  uint64_t  *chrom;
+  int       v1size, v2size;
+  solset_s  *v1,    *v2,
+            *iter,  *tmp;
+  
+  chrom = p->rbuf[index].ptr;
+  fitness = getfitness(pool_, chrom);
+  if (isfeasible(p, chrom))
+    printf ("Showing Feasible Chromosome %d with fitness %f:\n", index, fitness);
+  else 
+    printf ("Showing Infeasible Chromosome %d with fitness %f:\n", index, fitness);
+  printchrom(p, chrom);
+  printf("\n");
+  for (i = 0, v1size = 0, v2size = 0, v1 = NULL, v2 = NULL; i < GET_CHBITLEN(p); i++) {
+    if (chrom[i / 64] & (1llu << (i % 64))) {
+      ++v1size;
+      insert_solset (&v1, p->graph->vtable[i]);
+    }
+    else {
+      ++v2size;
+      insert_solset (&v2, p->graph->vtable[i]);
+    }
+  }
+  printf ("\nV1 = ");
+  print_solset (v1);
+  printf ("\nLength = %d\n", v1size);
+  printf ("V2 = ");
+  print_solset (v2);
+  printf ("\nLength = %d\n", v2size);
 }
 
 void cparse (void)
@@ -681,9 +756,13 @@ void cparse (void)
             pool_->select = roulette_sf;
             printf("Now using roulette selection.");
           }
-          else {
+          else if (val == 2) {
             pool_->select = rank_sf;
             printf("Now using rank selection\n");
+          }
+          else {
+            pool_->select = tournament_sf;
+            printf("Now using tournament selection\n");
           }
           break;
         default:
@@ -715,8 +794,10 @@ void cparse (void)
       case COM_SEL:
         if (pool_->select == roulette_sf)
           printf("Currently using roulette selection.\n");
-        else
+        else if (pool_->select == rank_sf)
           printf("Currently using rank selection.\n");
+        else
+          printf("Currently using tournament selection.\n");
         break;
       default:
         break;
@@ -769,23 +850,43 @@ int p_mutate (void)
 
 void p_show (void)
 {
+  int result, index;
+  
   if (stream_->type == T_NUM) {
+    index = atoi(stream_->lexeme);
     GTNEXT();
+    if (index <= 0 || index > POOLSIZE)
+      printf ("Value %d out of range. Range is 1 to %d.\n", index, POOLSIZE);
+    else
+      printsolution(pool_, --index);
   }
   else if (!strcmp (stream_->lexeme, "best")) {
     GTNEXT();
-    p_feasible ();
+    result = p_feasible ();
+    if (!result)
+      printsolution (pool_, POOLSIZE-1);
+    else if (result == 1) {
+      for (index = POOLSIZE-1; index >= 0
+          && pool_->rbuf[index].ptr != pool_->bestfeasible; index--);
+      printsolution (pool_, index);
+    }
+
   }
   else
     printf ("Expected number or 'best', but got '%s'.\n", stream_->lexeme);
 }
 
-void p_feasible (void)
+int p_feasible (void)
 {
+  int index;
+  
   if (!strcmp (stream_->lexeme, "feasible")) {
     GTNEXT();
+    return 1;
   }
   else if (stream_->type != T_EOF) {
     printf ("Expected 'feasible' or nothing, but got '%s'.\n", stream_->lexeme);
+    return -1;
   }
+  return 0;
 }

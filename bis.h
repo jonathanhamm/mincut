@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <time.h>
 
-#define CR_N 16
+#define CR_N 2
 #define TOURN_K 85
 #define CBUF_SIZE 32
 #define INITMUTATIONPROB 3
