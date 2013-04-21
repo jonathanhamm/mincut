@@ -85,11 +85,20 @@ struct vhash_s
 extern vhash_s vhash_;
 extern gtoken_s *stream_;
 
+
+/*Graph Parsing Routines*/
+
 extern gtoken_s *lex_ (unsigned char *buf);
 extern void freetokens (gtoken_s *list);
 
 /*graph data structure routines*/
 extern wgraph_s *gparse (const unsigned char *file);
+extern inline wgraph_s *wgraph_s_ (void);
+extern vertex_s *vertex_s_ (gtoken_s *tok);
+extern int addedge (vertex_s *v, edge_s *e);
+extern edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
+extern int insert_vertex (wgraph_s *graph, vertex_s *v);
+
 
 extern int vhashinsert (vertex_s *v, uint16_t index);
 extern uint16_t vgetindex (vertex_s *v);

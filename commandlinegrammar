@@ -4,7 +4,7 @@
 	set <op> numreal | get <op> | show <show>
 	
 <op>=>
-  mutate <mutate> | cross | select
+  mutate <mutate> | cross | select | k
 
 <mutate>=>
   op | prob

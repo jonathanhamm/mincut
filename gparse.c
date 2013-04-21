@@ -23,11 +23,6 @@ static void pedgeparam_ (wgraph_s *g);
 static void e_ (wgraph_s *g);
 
 /*graph data structure routines*/
-static inline wgraph_s *wgraph_s_ (void);
-static vertex_s *vertex_s_ (gtoken_s *tok);
-static int addedge (vertex_s *v, edge_s *e);
-static edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight);
-static int insert_vertex (wgraph_s *graph, vertex_s *v);
 static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
 static void printbyte (uint8_t b);
 

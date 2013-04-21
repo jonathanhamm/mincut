@@ -71,9 +71,10 @@ pool_s *pool_s_ (wgraph_s *g)
     for (i = 0; i < p->remain; i++)
         p->cmask |= (1llu << i);
   }
-  p->select = roulette_sf;
+  p->select = tournament_sf;
   p->cross = uniform_cr;
   p->mutate = mutate1;
+  p->k = TOURN_K;
   p->gen = 0;
   ptr = p->popul;
   for (i = 0; i < POOLSIZE; i++) {
@@ -98,10 +99,11 @@ pool_s *pool_s_ (wgraph_s *g)
   qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
   for (i = 0; i < POOLSIZE; i++) {
     p->accum += (int)p->rbuf[i].prob;
-    p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
+    p->rbuf[i].cummulative = (i+1);
     if (i)
       p->rbuf[i].cummulative += p->rbuf[i-1].cummulative;
   }
+  p->ranksum = p->rbuf[POOLSIZE-1].cummulative;
   p->fitsum = sum;
   return p;
 }
@@ -142,44 +144,6 @@ void printpool (pool_s *p)
     printf("  %f, %d, %d", getfitness (p, ptr), ((uint8_t *)ptr)[7] >> (8 - GET_CHBITLEN(p)), isfeasible (p, ptr));
     printf("\n");
     ptr += n;
-  }
-}
-
-/*
- Iterative Binary search that returns the index of roulette 'region'
- that 'key' fits into.  
- */
-int bsearch_r (roulette_s *roul, uint32_t key)
-{
-	int mid, low, high;
-
-  low = 0;
-  high = POOLSIZE-1;
-  for (mid = low+(high-low)/2; high >= low; mid = low+(high-low)/2) {
-    if (key < roul[mid].cummulative)
-      high = mid - 1;
-    else if (key > roul[mid].cummulative)
-      low = mid + 1;
-    else
-      return mid;
-  }
-  if (mid == POOLSIZE)
-    --mid;
-  return mid;
-}
-
-void roulette_sf (pool_s *p, selected_s *parents)
-{
-  int i;
-  uint32_t i1, i2;
-  
-  for (i = 0; i < NSELECT; i++) {
-    i1 = bsearch_r (p->rbuf, rand() % p->accum);
-    i2 = bsearch_r (p->rbuf, rand() % p->accum);
-    if (i2 == i1)
-      i2 = (i2 - 1) % POOLSIZE;
-    parents->couples[i].p1 = &p->rbuf[i1];
-    parents->couples[i].p2 = &p->rbuf[i2];
   }
 }
 
@@ -268,21 +232,14 @@ double getfitness (pool_s *p, uint64_t *chrom)
 void computeprob (pool_s *p)
 {
   uint16_t i, n;
-  uint64_t *ptr;
-  double sum, fc1, fc2;
+  double sum;
   
   sum = p->fitsum;
-  for (i = 0; i < POOLSIZE; i++) {
-    //printf("Assigning: %f, %f\n", sum, p->rbuf[i].fitness);
+  for (p->accum = 0, i = 0; i < POOLSIZE; i++) {
     p->rbuf[i].prob = sum / p->rbuf[i].fitness;
-  }
-  qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
-  for (i = 0, p->accum = 0; i < POOLSIZE; i++) {
-    p->rbuf[i].cummulative = (int)p->rbuf[i].prob;
-    if (i)
-      p->rbuf[i].cummulative += p->rbuf[i-1].cummulative;
     p->accum += (int)p->rbuf[i].prob;
   }
+  qsort (p->rbuf, POOLSIZE, sizeof(roulette_s), (int (*)(const void *, const void *))prcmp);
   if (isfeasible(p, p->rbuf[POOLSIZE-1].ptr))
     p->bestfeasible = p->rbuf[POOLSIZE-1].ptr;
 }
@@ -309,55 +266,125 @@ void setbit (uint64_t *chrom, uint16_t pos, int val)
     chrom[pos / 64] |= (1llu << (pos % 64));
 }
 
-#define TESTCROSSOVER_ 
-//#undef TESTCROSSOVER_
-
-void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
+void roulette_sf (pool_s *p, selected_s *parents)
 {
-  int i, pindex;
+  int i, j;
+  uint32_t i1, i2;
+  float sum;
+  
+  for (i = 0; i < NSELECT; i++) {
+    i1 = rand() % p->accum;
+    i2 = rand() % p->accum;
+    for (j = 0, sum = 0; j < POOLSIZE && sum <= (float)i1; sum += p->rbuf[j].prob, j++);
+    i1 = (j == POOLSIZE) ? j-1 : j;
+    for (j = 0, sum = 0; j < POOLSIZE && sum <= (float)i2; sum += p->rbuf[j].prob, j++);
+    i2 = (j == POOLSIZE) ? j-1 : j;
+    if (i2 == i1)
+      i2 = (i2 - 1) % POOLSIZE;
+    parents->couples[i].p1 = &p->rbuf[i1];
+    parents->couples[i].p2 = &p->rbuf[i2];
+  }
+}
+
+/*
+ Iterative Binary search that returns the index of rank 'region'
+ that 'key' fits into.
+ */
+int bsearch_r (roulette_s *roul, uint32_t key)
+{
+	int mid, low, high;
+  
+  low = 0;
+  high = POOLSIZE-1;
+  for (mid = low+(high-low)/2; high >= low; mid = low+(high-low)/2) {
+    if (key < roul[mid].cummulative)
+      high = mid - 1;
+    else if (key > roul[mid].cummulative)
+      low = mid + 1;
+    else
+      return mid;
+  }
+  if (mid == POOLSIZE)
+    --mid;
+  return mid;
+}
+
+void rank_sf (pool_s *p, selected_s *parents)
+{
+  int i;
+  uint32_t i1, i2;
+  for (i = 0; i < NSELECT; i++) {
+    i1 = bsearch_r (p->rbuf, rand() % p->ranksum);
+    i2 = bsearch_r (p->rbuf, rand() % p->ranksum);
+    if (i2 == i1)
+      i2 = (i2 - 1) % POOLSIZE;
+    parents->couples[i].p1 = &p->rbuf[i1];
+    parents->couples[i].p2 = &p->rbuf[i2];
+  }
+}
+
+void tournament_sf (pool_s *p, selected_s *parents)
+{
+  int       i;
+  uint32_t  i1a, i1b,
+            i2a, i2b;
+  uint8_t   k, R;
+  
+  for (i = 0, k = p->k; i < NSELECT; i++) {
+    i1a = rand() % POOLSIZE;
+    while ((i1b = rand() % POOLSIZE) == i1a);
+    i2a = rand() % POOLSIZE;
+    while ((i2b = rand() % POOLSIZE) == i2a);
+    R  = rand() % 100;
+    if (R < k) {
+      if (i1a > i1b)
+        parents->couples[i].p1 = &p->rbuf[i1a];
+      else
+        parents->couples[i].p1 = &p->rbuf[i1b];
+      if (i2a > i2b)
+        parents->couples[i].p2 = &p->rbuf[i2a];
+      else
+        parents->couples[i].p2 = &p->rbuf[i2b];
+    }
+    else {
+      if (i1a < i1b)
+        parents->couples[i].p1 = &p->rbuf[i1a];
+      else
+        parents->couples[i].p1 = &p->rbuf[i1b];
+      if (i2a < i2b)
+        parents->couples[i].p2 = &p->rbuf[i2a];
+      else
+        parents->couples[i].p2 = &p->rbuf[i2b];
+    }
+  }
+}
+
+void npoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
+{
+  int i, j, pindex;
   uint16_t point, inv;
   uint64_t mask;
   uint64_t *backup1, *backup2;
   
-#ifdef TESTCROSSOVER_
-  printf ("parents: \n");
-  printchrom(p, p1);
-  printf("\n");
-  printchrom (p, p2);
-#endif
   backup1 = &p->popul[CRBACKUP1];
   backup2 = &p->popul[CRBACKUP2];
   for (i = 0; i < p->chromsize; i++)
     backup1[i] = p1[i];
   for (i = 0; i < p->chromsize; i++)
     backup2[i] = p2[i];
-  point = rand() % GET_CHBITLEN(p);
+  point = rand() % (GET_CHBITLEN(p) / CR_N);
   inv = GET_CHBITLEN(p) - point;
-#ifdef TESTCROSSOVER_
-  printf("\nPoint: %d\n", point);
-#endif
-  if (point >= inv) {
-    for (i = 0; i < point; i++) {
-      setbit(dst1, i, getbit(backup2, point+i));
-      setbit(dst2, inv+i, getbit(backup1, i));
+  for (i = 0; i < CR_N; i++) {
+    for (j = i * (GET_CHBITLEN(p) / CR_N); j < inv; j++) {
+      setbit(dst1, j, getbit(backup2, point+j));
+      setbit(dst2, j, getbit(backup1, point+j));
+    }
+    for (j = i * (GET_CHBITLEN(p) / CR_N); j < point; j++) {
+      setbit(dst1, inv+j, getbit(backup2, j));
+      setbit(dst2, inv+j, getbit(backup1, j));
     }
   }
-  else {
-    for (i = 0; i < point; i++) {
-      setbit(dst1, i, getbit(backup2, inv+i));
-      setbit(dst2, point+i, getbit(backup1, i));
-    }
-
-  }
-#ifdef TESTCROSSOVER_
-  printf("Children:\n");
-  printchrom(p, dst1);
-  printf("\n");
-  printchrom(p, dst2);
-  printf("\n\n");
-#endif
 }
-
 
 /*
  p1 p2  mask  | f
@@ -626,35 +653,37 @@ void cparse (void)
         case COM_OP:
           if (val <= 1) {
             pool_->mutate = mutate1;
-            printf("Set to mutate operator 1\n");
+            printf("Mutate operator now set to: 1\n");
           }
           else {
             pool_->mutate = mutate2;
-            printf("Set to mutate operator 2\n");
+            printf("Mutate operator now set to: 2\n");
           }
           break;
         case COM_PROB:
           if (val < 0) val = 0;
           else if (val > 100) val = 100;
           pool_->mutateprob = (uint8_t)val;
-          printf("Set mutate probability to %d\n", val);
+          printf("Mutate probability now set to %d\n", val);
           break;
         case COM_X:
           if (val <= 1) {
             pool_->cross = uniform_cr;
-            printf("Set to use uniform crossover\n");
+            printf("Now using uniform crossover\n");
           }
           else {
-            pool_->cross = singlepoint_cr;
-            printf("Set to use single point crossover\n");
+            pool_->cross = npoint_cr;
+            printf("Now using n-point crossover, n = %d\n", CR_N);
           }
           break;
         case COM_SEL:
           if (val <= 1) {
-            printf("Set to use roulette selection.");
+            pool_->select = roulette_sf;
+            printf("Now using roulette selection.");
           }
           else {
-            printf("Set to use tournament (?) selection\n");
+            pool_->select = rank_sf;
+            printf("Now using rank selection\n");
           }
           break;
         default:
@@ -681,10 +710,13 @@ void cparse (void)
         if (pool_->cross == uniform_cr)
           printf("Currently using uniform crossover.\n");
         else
-          printf ("Currently using single point crossover\n");
+          printf ("Currently using n-point crossover, n = %d\n", CR_N);
         break;
       case COM_SEL:
-        printf("Too be implemented\n");
+        if (pool_->select == roulette_sf)
+          printf("Currently using roulette selection.\n");
+        else
+          printf("Currently using rank selection.\n");
         break;
       default:
         break;
@@ -746,7 +778,6 @@ void p_show (void)
   }
   else
     printf ("Expected number or 'best', but got '%s'.\n", stream_->lexeme);
-
 }
 
 void p_feasible (void)

@@ -4,9 +4,11 @@
 #include <stdint.h>
 #include <time.h>
 
+#define CR_N 16
+#define TOURN_K 85
 #define CBUF_SIZE 32
-#define INITMUTATIONPROB 2
-#define POOLSIZE 100
+#define INITMUTATIONPROB 3
+#define POOLSIZE 50
 #define CRBACKUP1 POOLSIZE
 #define CRBACKUP2 (POOLSIZE+1)
 
@@ -66,7 +68,9 @@ struct pool_s
   void (*cross) (pool_s *, uint64_t *, uint64_t *, uint64_t *, uint64_t *);
   void (*mutate) (pool_s *, uint64_t *);
   double fitsum;
+  uint16_t ranksum;
   uint32_t accum;
+  uint8_t k;
   uint64_t *bestfeasible;
   roulette_s rbuf[POOLSIZE];
   uint64_t popul[0];
@@ -82,9 +86,12 @@ extern void printweights (pool_s *p);
 
 /* Selection Functions */
 extern void roulette_sf (pool_s *p, selected_s *parents);
+extern void rank_sf (pool_s *p, selected_s *parents);
+extern void tournament_sf (pool_s *p, selected_s *parents);
+
 
 /* Crossover Functions */
-extern void singlepoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
+extern void npoint_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
 extern void uniform_cr (pool_s *p, uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
 
 
