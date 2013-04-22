@@ -9,8 +9,8 @@
 /* Begin PBXBuildFile section */
 		2F097CC416CDF40E00856678 /* gen.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 2F097CC316CDF40E00856678 /* gen.1 */; };
 		2F097CCE16CDF45C00856678 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F097CCA16CDF45C00856678 /* main.c */; };
-		2F19D5A616E19CEC00554277 /* gparse.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F19D5A516E19CEC00554277 /* gparse.c */; };
 		2F19D5A916EFFB4600554277 /* bis.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F19D5A816EFFB4600554277 /* bis.c */; };
+		2F3F2E2D17259AC80076271A /* parse.c in Sources */ = {isa = PBXBuildFile; fileRef = 2F3F2E2C17259AC80076271A /* parse.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -32,9 +32,9 @@
 		2F097CCA16CDF45C00856678 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = main.c; path = ../../main.c; sourceTree = "<group>"; };
 		2F097CCB16CDF45C00856678 /* graph */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = graph; path = ../../graph; sourceTree = "<group>"; };
 		2F097CCC16CDF45C00856678 /* bis.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bis.h; path = ../../bis.h; sourceTree = "<group>"; };
-		2F19D5A416E19CEC00554277 /* gparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = gparse.h; path = ../../gparse.h; sourceTree = "<group>"; };
-		2F19D5A516E19CEC00554277 /* gparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = gparse.c; path = ../../gparse.c; sourceTree = "<group>"; };
 		2F19D5A816EFFB4600554277 /* bis.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = bis.c; path = ../../bis.c; sourceTree = "<group>"; };
+		2F3F2E2B17259AC80076271A /* parse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = parse.h; path = ../../parse.h; sourceTree = "<group>"; };
+		2F3F2E2C17259AC80076271A /* parse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = parse.c; path = ../../parse.c; sourceTree = "<group>"; };
 		2F738736171653010080641B /* toy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = toy; path = ../../toy; sourceTree = "<group>"; };
 		2F73873717166F180080641B /* test64 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test64; path = ../../test64; sourceTree = "<group>"; };
 		2F73874D1716BFBF0080641B /* test128 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = test128; path = ../../test128; sourceTree = "<group>"; };
@@ -90,8 +90,8 @@
 				2F73873717166F180080641B /* test64 */,
 				2F738736171653010080641B /* toy */,
 				2F19D5A816EFFB4600554277 /* bis.c */,
-				2F19D5A416E19CEC00554277 /* gparse.h */,
-				2F19D5A516E19CEC00554277 /* gparse.c */,
+				2F3F2E2B17259AC80076271A /* parse.h */,
+				2F3F2E2C17259AC80076271A /* parse.c */,
 				2F097CCA16CDF45C00856678 /* main.c */,
 				2F097CCC16CDF45C00856678 /* bis.h */,
 				2F097CCB16CDF45C00856678 /* graph */,
@@ -152,8 +152,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				2F097CCE16CDF45C00856678 /* main.c in Sources */,
-				2F19D5A616E19CEC00554277 /* gparse.c in Sources */,
 				2F19D5A916EFFB4600554277 /* bis.c in Sources */,
+				2F3F2E2D17259AC80076271A /* parse.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

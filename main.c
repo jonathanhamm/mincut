@@ -1,4 +1,4 @@
-#include "gparse.h"
+#include "parse.h"
 #include "bis.h"
 #include <stdio.h>
 #include <time.h>
@@ -12,7 +12,7 @@ int main (int argc, char **argv)
     printf("Usage: ./ge <filename>");
     exit (EXIT_FAILURE);
   }
-  //run_ge (gparse(argv[1]));
-  run_simanneal (gparse(argv[1]));
+  run_ge (gparse(argv[1]));
+  //run_simanneal (gparse(argv[1]));
   exit (EXIT_SUCCESS);
 }

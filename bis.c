@@ -3,7 +3,7 @@
 * Author: Jonathan Hamm
 */
 
-#include "gparse.h"
+#include "parse.h"
 #include "bis.h"
 #include <stdlib.h>
 #include <stdio.h>
