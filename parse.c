@@ -51,7 +51,7 @@ wgraph_s *gparse (const unsigned char *file)
   buf = read_gfile (file);
   if (!buf)
     return NULL;
-  if (!lex_ (buf))
+  if (!lex (buf))
     return NULL;
   g = parse_();
   if (!g)
@@ -144,7 +144,7 @@ uint16_t vgetindex (vertex_s *v)
  *  real: (0...9)+<optional_fract>
  *  <optional_fract>: (dot 0...9)?
  */
-gtoken_s *lex_ (unsigned char *buf)
+gtoken_s *lex (unsigned char *buf)
 {
   unsigned char   backup;
   unsigned char   *bckptr;
@@ -255,9 +255,9 @@ gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
 /*  Graph Grammar:
  *  <graph> => <nodelist> <edgelist> EOF
  *  <nodelist> => V={v <nodeparam>}
- *  <nodeparam> => ,v <nodeparam> | E
+ *  <nodeparam> => ,v <nodeparam> | epsilon
  *  <edgelist> => E={<e> <edgeparam> }
- *  <edgeparam> => ,<e> <edgeparam> | E
+ *  <edgeparam> => ,<e> <edgeparam> | epsilon
  *  <e> => {n,n,real}
  */
 wgraph_s *parse_ (void)
@@ -473,6 +473,28 @@ void printbyte (uint8_t b)
   printf("\n");
 }
 
+/*
+ Commandline Grammar
+ 
+ <cparse>=>
+ status | exit | quit | q | Q
+ |
+ set <op> numreal | get <op> | show <show>
+ 
+ <op>=>
+ mutate <mutate> | cross | select | k
+ 
+ <mutate>=>
+ op | prob
+ 
+ <selection>=>
+ selection id
+ 
+ <show>=>
+ numint | best <feasible>
+ 
+ <feasible>=> feasible | epsilon
+ */
 void cparse (void)
 {
   int result, val;

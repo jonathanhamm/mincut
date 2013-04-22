@@ -601,7 +601,7 @@ void cSIGUSR1 (int signal)
   gtoken_s *head;
   
   read(pipe_[0], cbuf, CBUF_SIZE);
-  head = lex_ (cbuf);
+  head = lex (cbuf);
   if (!head)
     printf ("Illegal Symbols Used\n");
   else {

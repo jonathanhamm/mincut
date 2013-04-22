@@ -14,7 +14,7 @@
   
 <show>=>
 	numint | best <feasible>
-	
+  
 <feasible>=> feasible | €
 
 	

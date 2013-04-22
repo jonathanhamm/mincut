@@ -100,12 +100,11 @@ extern gtoken_s *stream_;
 
 
 /*Graph Parsing Routines*/
-
-extern gtoken_s *lex_ (unsigned char *buf);
+extern gtoken_s *lex (unsigned char *buf);
+extern wgraph_s *gparse (const unsigned char *file);
 extern void freetokens (gtoken_s *list);
 
 /*graph data structure routines*/
-extern wgraph_s *gparse (const unsigned char *file);
 extern inline wgraph_s *wgraph_s_ (void);
 extern vertex_s *vertex_s_ (gtoken_s *tok);
 extern int addedge (vertex_s *v, edge_s *e);
