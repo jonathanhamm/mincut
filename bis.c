@@ -452,6 +452,28 @@ void mutate2 (uint64_t *victim)
   }
 }
 
+void singlemove (uint64_t *victim)
+{
+  uint8_t srcb, dstb;
+  uint16_t src, dst;
+  
+  src = rand() % pool_->bitlen;
+  while ((dst = rand() % pool_->bitlen) == src);
+  srcb = getbit(victim, src);
+}
+
+void pairwise_ex (uint64_t *victim)
+{
+  int backup;
+  uint16_t index1, index2;
+  
+  index1 = rand() % pool_->bitlen;
+  while ((index2 = rand() % pool_->bitlen) == index1);
+  backup = getbit(victim, index1);
+  setbit(victim, index1, getbit(victim, index2));
+  setbit(victim, index2, backup);
+}
+
 int run_ge (wgraph_s *g)
 {
   int i;
@@ -474,7 +496,7 @@ int run_ge (wgraph_s *g)
     THROW_EXCEPTION();
   pid_ = fork();
   if (pid_) {
-    printf ("Now running program with chromosome size: %d\n> ", pool_->bitlen);
+    printf ("Now running Genetic Algorithm with chromosome size: %d\n> ", pool_->bitlen);
     cbuf[CBUF_SIZE-1] = UEOF;
     while (1) {
       index = 0;
@@ -544,7 +566,7 @@ int run_ge (wgraph_s *g)
   return 0;
   
 exception_:
-  perror("Failed Setting Program Initialization");
+  perror("Program Failed Initialization");
   exit (EXIT_FAILURE);
 }
 
@@ -682,4 +704,80 @@ void printsolution (int index)
   printf ("V2 = ");
   print_solset (v2);
   printf ("Length = %d\n", v2size);
+}
+
+
+void sima_rand (roulette_s *dst)
+{
+  uint32_t i;
+  uint64_t *ptr;
+  
+  ptr = pool_->solution;
+  for (i = 0; i < pool_->solusize; i++, ptr++) {
+    ((uint16_t *)dst->ptr)[0] = (uint16_t)rand();
+    ((uint16_t *)dst->ptr)[1] = (uint16_t)rand();
+    ((uint16_t *)dst->ptr)[2] = (uint16_t)rand();
+    ((uint16_t *)dst->ptr)[3] = (uint16_t)rand();
+  }
+  *(ptr-1) &= pool_->cmask;
+  dst->fitness = getfitness(ptr);
+}
+
+int run_simanneal (wgraph_s *g)
+{
+  float i;
+  int j;
+  float iterations;
+  float T, alpha, beta;
+  roulette_s *s, *new_s, *extra;
+  
+  pool_ = calloc (1, sizeof(*pool_) + 3 * CQWORDSIZE(g->nvert+1) * 8);
+  if (!pool_)
+    THROW_EXCEPTION();
+  pool_->solusize = (g->nvert / 64) + (g->nvert % 64 != 0);
+  pool_->bitlen = ((pool_->remain) ? ((pool_->chromsize * 64) - (64 - pool_->remain)) : pool_->chromsize*64);
+  pool_->remain = g->nvert % 64;
+  if (!(g->nvert % 64) && g->nvert)
+    pool_->cmask = 0xffffffffffffffffllu;
+  else {
+    for (j = 0; j < pool_->remain; j++)
+      pool_->cmask |= (1llu << j);
+  }
+  pool_->cross = uniform_cr;
+  pool_->mutate = pairwise_ex;
+  pool_->graph = g;
+  T = SIMA_t0;
+  alpha = SIMA_alpha;
+  beta = SIMA_beta;
+  iterations = SIMA_i0;
+    
+  s = &pool_->rbuf[SIMA_best];
+  new_s = &pool_->rbuf[SIMA_tmp];
+  extra = &pool_->rbuf[SIMA_extra];
+  s->ptr = pool_->solution;
+  new_s->ptr = &pool_->solution[pool_->solusize];
+  extra->ptr = &pool_->solution[2*pool_->solusize];
+
+  sima_rand(s);
+  for (j = 0; j < pool_->solusize; j++)
+    new_s->ptr[j] = s->ptr[j];
+  while (1) {
+    for (i = 0; i < iterations; i++) {
+      pool_->mutate (new_s->ptr);
+      new_s->fitness = getfitness(new_s->ptr);
+      if (new_s->fitness < s->fitness || SIMA_RAND() < pow (M_E, (s->fitness - new_s->fitness) / T)) {
+        for (j = 0; j < pool_->solusize; j++)
+          s->ptr[j] = new_s->ptr[j];
+        s->fitness = new_s->fitness;
+      }
+    }
+    T = alpha * T;
+    iterations = beta * T;
+    printf ("%f\n", getfitness(s->ptr));
+  }
+  return 0;
+  
+exception_:
+  perror("Program Failed Initialization");
+  exit (EXIT_FAILURE);
 }

@@ -12,6 +12,15 @@
 #define CRBACKUP1 POOLSIZE
 #define CRBACKUP2 (POOLSIZE+1)
 
+#define SIMA_i0     2
+#define SIMA_t0     122
+#define SIMA_alpha  0.80
+#define SIMA_beta   1.05
+#define SIMA_best   0
+#define SIMA_tmp    1
+#define SIMA_extra  2
+#define SIMA_RAND() (float)rand()/(float)RAND_MAX
+
 #define PSIZE_ROUL_DIV 5
 
 #if POOLSIZE / PSIZE_ROUL_DIV == 0
@@ -56,8 +65,10 @@ struct selected_s
 struct pool_s
 {
   uint64_t gen;       /*generation number*/
+#define solusize chromsize
   uint16_t chromsize; /*size in quad words*/
   uint16_t bitlen;    /*size in bits*/
+  
   uint64_t cmask;     /*bit mask for each chromosome*/
   uint8_t remain;     /*Remainder bits that carry over in new quad word*/
   pool_s *parent;
@@ -66,6 +77,7 @@ struct pool_s
   wgraph_s *graph;
   uint64_t start;
   void (*select) (selected_s *);
+#define perturb(a,b) cross(a,b,new_s->ptr,extra->ptr)
   void (*cross) (uint64_t *, uint64_t *, uint64_t *, uint64_t *);
   void (*mutate) (uint64_t *);
   double fitsum;
@@ -74,17 +86,11 @@ struct pool_s
   uint8_t k;
   uint64_t *bestfeasible;
   roulette_s rbuf[POOLSIZE];
+#define solution popul
   uint64_t popul[0];
 };
 
-struct simulanneal_s
-{
-  void (*perturb) (void);
-  uint64_t solution[0];
-};
-
 extern pool_s *pool_;
-extern simulanneal_s *simul;
 
 /*Genetic Algorithm routines*/
 extern void printpool (void);
@@ -112,5 +118,6 @@ extern void mutate2 (uint64_t *victim);
 extern void printsolution (int index);
 
 /*simulated annealing functions*/
+extern int run_simanneal (wgraph_s *g);
 
 #endif
