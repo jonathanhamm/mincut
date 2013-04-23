@@ -9,10 +9,23 @@ int main (int argc, char **argv)
   clock_t t;
   
   if (argc != 2) {
-    printf("Usage: ./ge <filename>");
-    exit (EXIT_FAILURE);
+    if (argc == 3) {
+      if (!strcmp(argv[2], "ge"))
+        run_ge (gparse(argv[1]));
+      else if (!strcmp(argv[2], "sa"))
+        run_simanneal (gparse(argv[1]));
+      else {
+        printf("Usage: ./ge <filename> <algorithm>");
+        exit (EXIT_FAILURE);
+      }
+    }
+    else {
+      printf("Usage: ./ge <filename> <algorithm>");
+      exit (EXIT_FAILURE);
+    }
   }
-  run_ge (gparse(argv[1]));
-  //run_simanneal (gparse(argv[1]));
+  else
+    run_ge (gparse(argv[1]));
   exit (EXIT_SUCCESS);
+  //run_simanneal (gparse(argv[1]));
 }

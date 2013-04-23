@@ -13,9 +13,9 @@
 #define CRBACKUP2 (POOLSIZE+1)
 
 #define SIMA_i0     2
-#define SIMA_t0     122
+#define SIMA_t0     20
 #define SIMA_alpha  0.80
-#define SIMA_beta   1.05
+#define SIMA_beta   1.01
 #define SIMA_best   0
 #define SIMA_tmp    1
 #define SIMA_extra  2
