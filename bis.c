@@ -578,10 +578,8 @@ exception_:
   exit (EXIT_FAILURE);
 }
 
-void printstatus (void)
+void printgestatus (void)
 {
-  int i;
-  
   printf("Status at Generation: %llu\n", pool_->gen);
   printpool();
   printf("\nMost Fit ( weight = %f ):\n", pool_->rbuf[POOLSIZE-1].fitness);
@@ -601,6 +599,11 @@ void printstatus (void)
 
 }
 
+void printsastatus (void)
+{
+  printf("Status at \"Generation\": %llu\n", pool_->gen);
+  
+}
 
 void cSIGUSR1 (int signal)
 {
@@ -749,8 +752,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
     for (j = 0; j < pool_->remain; j++)
       pool_->cmask |= (1llu << j);
   }
-  pool_->cross = uniform_cr;
-  pool_->mutate = mutate1;
+  pool_->perturb = mutate1;
   pool_->graph = g;
   pool_->T = SIMA_t0;
   pool_->iterations = SIMA_i0;
@@ -763,10 +765,15 @@ int run_simanneal (wgraph_s *g, int sa_hc)
   s = &pool_->rbuf[SIMA_best];
   new_s = &pool_->rbuf[SIMA_tmp];
   s->ptr = pool_->solution;
-  new_s->ptr = &pool_->solution[pool_->solusize];
+  new_s->ptr = &pool_->solution[pool_->solusize];  
   sima_rand(s);
   for (j = 0; j < pool_->solusize; j++)
     new_s->ptr[j] = s->ptr[j];
+  pool_->bestfeasible = calloc (sizeof(uint64_t), pool_->solusize);
+  if (!pool_->bestfeasible)
+    THROW_EXCEPTION();
+  for (j = 0; j < pool_->solusize; j++)
+    pool_->bestfeasible[j] = s->ptr[j];
   if (signal(SIGINT, pSIGINT) == SIG_ERR)
     THROW_EXCEPTION();
   if (signal(SIGALRM, sigNOP) == SIG_ERR)
@@ -799,6 +806,10 @@ int run_simanneal (wgraph_s *g, int sa_hc)
         if (new_s->fitness < s->fitness || pool_->e_pow()) {
           for (j = 0; j < pool_->solusize; j++)
             s->ptr[j] = new_s->ptr[j];
+          if (isfeasible(s->ptr)) {
+            for (j = 0; j < pool_->solusize; j++)
+              pool_->bestfeasible[j] = s->ptr[j];
+          }
           s->fitness = new_s->fitness;
           printf("%f %f ",s->fitness, s->fitness);
           if (isfeasible(s->ptr))
@@ -809,6 +820,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
       }
       pool_->T = pool_->alpha * pool_->T;
       pool_->iterations = pool_->beta * pool_->T;
+      pool_->gen++;
     }
   }
   return 0;

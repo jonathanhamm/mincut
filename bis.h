@@ -121,6 +121,7 @@ extern void mutate1 (uint64_t *victim);
 extern void mutate2 (uint64_t *victim);
 
 extern void printsolution (int index);
+extern void printgestatus (void);
 
 /*simulated annealing functions*/
 extern int run_simanneal (wgraph_s *g, int sa_hc);

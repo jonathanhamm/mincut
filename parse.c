@@ -52,7 +52,7 @@ static int p_feasible (void);
 /* Simulated Annealing Comandline Parsing Routines */
 static void printsa_status (void);
 static int saparam (void);
-static void sashow (void);
+static int sashow (void);
 
 
 wgraph_s *gparse (const unsigned char *file)
@@ -520,7 +520,7 @@ void cgeparse (void)
       )
   {
     printf("Final:\n");
-    printstatus ();
+    printgestatus ();
     kill(getppid(), SIGQUIT);
     exit(EXIT_SUCCESS);
   }
@@ -623,7 +623,7 @@ void cgeparse (void)
   }
   else if (!strcmp (stream_->lexeme, "status")) {
     GTNEXT();
-    printstatus();
+    printgestatus();
   }
   else
     printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
@@ -687,7 +687,6 @@ void p_show (void)
            && pool_->rbuf[index].ptr != pool_->bestfeasible; index--);
       printsolution (index);
     }
-    
   }
   else
     printf ("Expected number or 'best', but got '%s'.\n", stream_->lexeme);
@@ -708,6 +707,7 @@ int p_feasible (void)
   return 0;
 }
 
+
 /*
  Simulate Annealing Commandline Grammar
  
@@ -717,6 +717,8 @@ int p_feasible (void)
     set <saparam> num
     |
     get <saparam>
+    |
+    show <show>
  
     <saparam>=>
         temp numreal | alpha numreal 
@@ -725,6 +727,8 @@ int p_feasible (void)
  
     <show>=>
         best <feasible>
+        |
+        epsilon
 
     <feasible>=> feasible | epsilon
  */
@@ -742,7 +746,7 @@ void csaparse (void)
       )
   {
     printf("Final:\n");
-    printstatus ();
+    printgestatus ();
     kill(getppid(), SIGQUIT);
     exit(EXIT_SUCCESS);
   }
@@ -798,7 +802,8 @@ void csaparse (void)
     }
   }
   else if (!strcmp (stream_->lexeme, "show")) {
-    
+    GTNEXT();
+    result = sashow();
   }
   else
     printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
@@ -824,7 +829,7 @@ int saparam (void)
   return COM_ERR;
 }
 
-void sashow (void)
+int sashow (void)
 {
   
 }
