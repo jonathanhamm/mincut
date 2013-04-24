@@ -732,12 +732,15 @@ void csaparse (void)
     exit(EXIT_SUCCESS);
   }
   else if (!strcmp(stream_->lexeme, "status")) {
+    GTNEXT();
     
   }
   else if (!strcmp(stream_->lexeme, "set")) {
-    
+    GTNEXT();
   } 
   else if (!strcmp(stream_->lexeme, "get")) {
-    
+    GTNEXT();
   }
+  else
+    printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
 }

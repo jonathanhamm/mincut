@@ -46,6 +46,9 @@ static void computeprob (void);
 static int isfeasible (uint64_t *chrom);
 static void printchrom (uint64_t *chrom);
 
+static int e_pow_sa (void);
+static int nop_hc (void);
+
 static pid_t pid_;
 static int pipe_[2];
 pool_s *pool_;
@@ -726,7 +729,7 @@ void sima_rand (roulette_s *dst)
   dst->fitness = getfitness(dst->ptr);
 }
 
-int run_simanneal (wgraph_s *g)
+int run_simanneal (wgraph_s *g, int sa_hc)
 {
   float i;
   int j;
@@ -753,6 +756,10 @@ int run_simanneal (wgraph_s *g)
   pool_->iterations = SIMA_i0;
   pool_->alpha = SIMA_alpha;
   pool_->beta = SIMA_beta;
+  if (sa_hc == SIMULATED_ANNEALING)
+    pool_->e_pow = e_pow_sa;
+  else
+    pool_->e_pow = nop_hc;
   s = &pool_->rbuf[SIMA_best];
   new_s = &pool_->rbuf[SIMA_tmp];
   s->ptr = pool_->solution;
@@ -787,9 +794,9 @@ int run_simanneal (wgraph_s *g)
       THROW_EXCEPTION();
     while (1) {
       for (i = 0; i < pool_->iterations; i++) {
-        pool_->mutate (new_s->ptr);
+        pool_->perturb (new_s->ptr);
         new_s->fitness = getfitness(new_s->ptr);
-        if (new_s->fitness < s->fitness || SIMA_RAND() < pow (M_E, (s->fitness - new_s->fitness) / pool_->T)) {
+        if (new_s->fitness < s->fitness || pool_->e_pow()) {
           for (j = 0; j < pool_->solusize; j++)
             s->ptr[j] = new_s->ptr[j];
           s->fitness = new_s->fitness;
@@ -811,6 +818,15 @@ exception_:
   exit (EXIT_FAILURE);
 }
 
+int e_pow_sa (void)
+{
+  return (SIMA_RAND() < pow (M_E, (pool_->rbuf[SIMA_best].fitness - pool_->rbuf[SIMA_tmp].fitness) / pool_->T));
+}
+
+int nop_hc (void)
+{
+  return 0;
+}
 
 void cSIGUSR1_sa (int signal)
 {

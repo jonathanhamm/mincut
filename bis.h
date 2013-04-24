@@ -21,6 +21,9 @@
 #define SIMA_extra  2
 #define SIMA_RAND() (float)rand()/(float)RAND_MAX
 
+#define SIMULATED_ANNEALING 1
+#define HILL_CLIMBNG  0
+
 #define PSIZE_ROUL_DIV 5
 
 #if POOLSIZE / PSIZE_ROUL_DIV == 0
@@ -64,7 +67,6 @@ struct selected_s
 struct pool_s
 {
   uint64_t gen;       /*generation number*/
-#define solusize chromsize
   uint16_t chromsize; /*size in quad words*/
   uint16_t bitlen;    /*size in bits*/
   
@@ -78,6 +80,7 @@ struct pool_s
   void (*select) (selected_s *);
   void (*cross) (uint64_t *, uint64_t *, uint64_t *, uint64_t *);
   void (*mutate) (uint64_t *);
+  int  (*e_pow) (void); /* The power calculation used in simluated annealing which is absent from hill climbing*/
   double fitsum;
   uint16_t ranksum;
   uint32_t accum;
@@ -86,7 +89,8 @@ struct pool_s
   roulette_s rbuf[POOLSIZE];
   /* Simulated Annealing and Hill Climbing */
   float iterations, T, alpha, beta;
-  
+#define perturb mutate
+#define solusize chromsize
 #define solution popul
   uint64_t popul[0];
 };
@@ -119,6 +123,6 @@ extern void mutate2 (uint64_t *victim);
 extern void printsolution (int index);
 
 /*simulated annealing functions*/
-extern int run_simanneal (wgraph_s *g);
+extern int run_simanneal (wgraph_s *g, int sa_hc);
 
 #endif
