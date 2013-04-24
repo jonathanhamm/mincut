@@ -195,19 +195,6 @@
          ignoreCount = "0"
          continueAfterRunningActions = "No"
          filePath = "../bis.c"
-         timestampString = "388270083.94737"
-         startingColumnNumber = "9223372036854775807"
-         endingColumnNumber = "9223372036854775807"
-         startingLineNumber = "730"
-         endingLineNumber = "730"
-         landmarkName = "run_simanneal()"
-         landmarkType = "7">
-      </FileBreakpoint>
-      <FileBreakpoint
-         shouldBeEnabled = "No"
-         ignoreCount = "0"
-         continueAfterRunningActions = "No"
-         filePath = "../bis.c"
          timestampString = "388312919.461036"
          startingColumnNumber = "9223372036854775807"
          endingColumnNumber = "9223372036854775807"

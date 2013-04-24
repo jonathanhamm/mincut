@@ -122,6 +122,41 @@ void pool_s_ (wgraph_s *g)
   pool_->fitsum = sum;
 }
 
+void pool_s_simanneal (wgraph_s *g, int sa_hc)
+{
+  int i;
+  
+  pool_ = calloc (1, sizeof(*pool_) + 2 * CQWORDSIZE(g->nvert+1) * 8);
+  if (!pool_) {
+    perror ("Heap Allocation Error");
+    exit (EXIT_FAILURE);
+  }
+  pool_->solusize = (g->nvert / 64) + (g->nvert % 64 != 0);
+  pool_->remain = g->nvert % 64;
+  pool_->bitlen = ((pool_->remain) ? ((pool_->chromsize * 64) - (64 - pool_->remain)) : pool_->chromsize*64);
+  if (!(g->nvert % 64) && g->nvert)
+    pool_->cmask = 0xffffffffffffffffllu;
+  else {
+    for (i = 0; i < pool_->remain; i++)
+      pool_->cmask |= (1llu << i);
+  }
+  pool_->perturb = mutate1;
+  pool_->graph = g;
+  pool_->T = SIMA_t0;
+  pool_->iterations = SIMA_i0;
+  pool_->alpha = SIMA_alpha;
+  pool_->beta = SIMA_beta;
+  if (sa_hc == SIMULATED_ANNEALING)
+    pool_->e_pow = e_pow_sa;
+  else
+    pool_->e_pow = nop_hc;
+  pool_->bestfeasible = calloc (sizeof(uint64_t), pool_->solusize);
+  if (!pool_->bestfeasible) {
+    perror ("Heap Allocation Error");
+    exit (EXIT_FAILURE);
+  }
+}
+
 void printqword (uint64_t lword, uint8_t end)
 {
   uint8_t i;
@@ -740,38 +775,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
   unsigned char cbuf[CBUF_SIZE];
   roulette_s *s, *new_s, *extra;
   
-  pool_ = calloc (1, sizeof(*pool_) + 2 * CQWORDSIZE(g->nvert+1) * 8);
-  if (!pool_)
-    THROW_EXCEPTION();
-  pool_->solusize = (g->nvert / 64) + (g->nvert % 64 != 0);
-  pool_->remain = g->nvert % 64;
-  pool_->bitlen = ((pool_->remain) ? ((pool_->chromsize * 64) - (64 - pool_->remain)) : pool_->chromsize*64);
-  if (!(g->nvert % 64) && g->nvert)
-    pool_->cmask = 0xffffffffffffffffllu;
-  else {
-    for (j = 0; j < pool_->remain; j++)
-      pool_->cmask |= (1llu << j);
-  }
-  pool_->perturb = mutate1;
-  pool_->graph = g;
-  pool_->T = SIMA_t0;
-  pool_->iterations = SIMA_i0;
-  pool_->alpha = SIMA_alpha;
-  pool_->beta = SIMA_beta;
-  if (sa_hc == SIMULATED_ANNEALING)
-    pool_->e_pow = e_pow_sa;
-  else
-    pool_->e_pow = nop_hc;
-  s = &pool_->rbuf[SIMA_best];
-  new_s = &pool_->rbuf[SIMA_tmp];
-  s->ptr = pool_->solution;
-  new_s->ptr = &pool_->solution[pool_->solusize];  
-  sima_rand(s);
-  for (j = 0; j < pool_->solusize; j++)
-    new_s->ptr[j] = s->ptr[j];
-  pool_->bestfeasible = calloc (sizeof(uint64_t), pool_->solusize);
-  if (!pool_->bestfeasible)
-    THROW_EXCEPTION();
+  pool_s_simanneal (g, sa_hc);
   for (j = 0; j < pool_->solusize; j++)
     pool_->bestfeasible[j] = s->ptr[j];
   if (signal(SIGINT, pSIGINT) == SIG_ERR)
