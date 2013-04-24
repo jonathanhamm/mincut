@@ -114,7 +114,7 @@ extern int vhashinsert (vertex_s *v, uint16_t index);
 extern uint16_t vgetindex (vertex_s *v);
 extern void printgraph (wgraph_s *g);
 
-extern void cparse (void);
-
+extern void cgeparse (void);
+extern void csaparse (void);
 
 #endif

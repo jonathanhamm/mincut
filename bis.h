@@ -12,10 +12,10 @@
 #define CRBACKUP1 POOLSIZE
 #define CRBACKUP2 (POOLSIZE+1)
 
-#define SIMA_i0     2
-#define SIMA_t0     20
+#define SIMA_i0     100
+#define SIMA_t0     500
 #define SIMA_alpha  0.80
-#define SIMA_beta   1.01
+#define SIMA_beta   1.05
 #define SIMA_best   0
 #define SIMA_tmp    1
 #define SIMA_extra  2
@@ -35,7 +35,6 @@
 #define CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0)) 
 
 typedef struct pool_s pool_s;
-typedef struct simulanneal_s simulanneal_s;
 
 /*Chromosomes are Little Endian, and Packed into a 64-bit alligned buffer*/
 typedef struct roulette_s roulette_s;
@@ -77,7 +76,6 @@ struct pool_s
   wgraph_s *graph;
   uint64_t start;
   void (*select) (selected_s *);
-#define perturb(a,b) cross(a,b,new_s->ptr,extra->ptr)
   void (*cross) (uint64_t *, uint64_t *, uint64_t *, uint64_t *);
   void (*mutate) (uint64_t *);
   double fitsum;
@@ -86,6 +84,9 @@ struct pool_s
   uint8_t k;
   uint64_t *bestfeasible;
   roulette_s rbuf[POOLSIZE];
+  /* Simulated Annealing and Hill Climbing */
+  float iterations, T, alpha, beta;
+  
 #define solution popul
   uint64_t popul[0];
 };

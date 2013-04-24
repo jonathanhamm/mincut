@@ -5,9 +5,7 @@
 #include <stdlib.h>
 
 int main (int argc, char **argv) 
-{
-  clock_t t;
-  
+{  
   if (argc != 2) {
     if (argc == 3) {
       if (!strcmp(argv[2], "ge"))
@@ -27,5 +25,4 @@ int main (int argc, char **argv)
   else
     run_ge (gparse(argv[1]));
   exit (EXIT_SUCCESS);
-  //run_simanneal (gparse(argv[1]));
 }

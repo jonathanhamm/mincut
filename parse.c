@@ -474,7 +474,7 @@ void printbyte (uint8_t b)
 }
 
 /*
- Commandline Grammar
+ Genetic Algorithm Commandline Grammar
  
  <cparse>=>
  status | exit | quit | q | Q
@@ -495,7 +495,7 @@ void printbyte (uint8_t b)
  
  <feasible>=> feasible | epsilon
  */
-void cparse (void)
+void cgeparse (void)
 {
   int result, val;
   
@@ -694,4 +694,50 @@ int p_feasible (void)
     return -1;
   }
   return 0;
+}
+
+/*
+ Simulate Annealing Commandline Grammar
+ 
+ <cparse>=>
+    status | exit | quit | q | Q
+    |
+    set <saparam> num
+    |
+    get <saparam>
+ 
+    <saparam>=>
+        temp numreal | alpha numreal 
+        | 
+        iter numreal | beta numeral 
+ 
+    <show>=>
+        best <feasible>
+
+    <feasible>=> feasible | epsilon
+ */
+void csaparse (void)
+{
+  if (
+      !strcmp (stream_->lexeme, "exit")  ||
+      !strcmp (stream_->lexeme, "quit")  ||
+      !strcmp (stream_->lexeme, "Quit")  ||
+      !strcmp (stream_->lexeme, "q")     ||
+      !strcmp (stream_->lexeme, "Q")
+      )
+  {
+    printf("Final:\n");
+    printstatus ();
+    kill(getppid(), SIGQUIT);
+    exit(EXIT_SUCCESS);
+  }
+  else if (!strcmp(stream_->lexeme, "status")) {
+    
+  }
+  else if (!strcmp(stream_->lexeme, "set")) {
+    
+  } 
+  else if (!strcmp(stream_->lexeme, "get")) {
+    
+  }
 }

@@ -439,7 +439,7 @@ void mutate1 (uint64_t *victim)
   int i, n;
   uint16_t index;
   
-  n = rand() % (pool_->bitlen / 8);
+  n = rand() % (pool_->bitlen / 5);
   if (!isfeasible(victim))
     ++n;
   for (i = 0; i < n; i++) {
@@ -610,7 +610,7 @@ void cSIGUSR1 (int signal)
   if (!head)
     printf ("Illegal Symbols Used\n");
   else {
-    cparse ();
+    cgeparse ();
     freetokens (stream_);
   }
   printf("> ");
@@ -730,8 +730,8 @@ int run_simanneal (wgraph_s *g)
 {
   float i;
   int j;
-  float iterations;
-  float T, alpha, beta;
+  uint16_t index;
+  unsigned char cbuf[CBUF_SIZE];
   roulette_s *s, *new_s, *extra;
   
   pool_ = calloc (1, sizeof(*pool_) + 2 * CQWORDSIZE(g->nvert+1) * 8);
@@ -749,10 +749,10 @@ int run_simanneal (wgraph_s *g)
   pool_->cross = uniform_cr;
   pool_->mutate = mutate1;
   pool_->graph = g;
-  T = SIMA_t0;
-  alpha = SIMA_alpha;
-  beta = SIMA_beta;
-  iterations = SIMA_i0;
+  pool_->T = SIMA_t0;
+  pool_->iterations = SIMA_i0;
+  pool_->alpha = SIMA_alpha;
+  pool_->beta = SIMA_beta;
   s = &pool_->rbuf[SIMA_best];
   new_s = &pool_->rbuf[SIMA_tmp];
   s->ptr = pool_->solution;
@@ -767,7 +767,18 @@ int run_simanneal (wgraph_s *g)
   if (pipe (pipe_) == -1)
     THROW_EXCEPTION();
   pid_ = fork();
-  if (!pid_) {
+  if (pid_) {
+    index = 0;
+    while ((cbuf[index] = (char)getchar()) != '\n') {
+      if (index < CBUF_SIZE-1)
+        ++index;
+      else
+        printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
+    }
+    cbuf[index] = UEOF;
+    write(pipe_[1], cbuf, CBUF_SIZE);
+    kill (pid_, SIGUSR1);
+    pause ();
   }
   else {
     if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
@@ -775,18 +786,22 @@ int run_simanneal (wgraph_s *g)
     if (signal(SIGINT, sigNOP) == SIG_ERR)
       THROW_EXCEPTION();
     while (1) {
-      for (i = 0; i < iterations; i++) {
+      for (i = 0; i < pool_->iterations; i++) {
         pool_->mutate (new_s->ptr);
         new_s->fitness = getfitness(new_s->ptr);
-        if (new_s->fitness < s->fitness || SIMA_RAND() < pow (M_E, (s->fitness - new_s->fitness) / T)) {
+        if (new_s->fitness < s->fitness || SIMA_RAND() < pow (M_E, (s->fitness - new_s->fitness) / pool_->T)) {
           for (j = 0; j < pool_->solusize; j++)
             s->ptr[j] = new_s->ptr[j];
           s->fitness = new_s->fitness;
-          printf("%f\n",s->fitness);
+          printf("%f %f ",s->fitness, s->fitness);
+          if (isfeasible(s->ptr))
+            printf("feasible\n");
+          else
+            printf("not feasible\n");
         }
       }
-      T = alpha * T;
-      iterations = beta * T;
+      pool_->T = pool_->alpha * pool_->T;
+      pool_->iterations = pool_->beta * pool_->T;
     }
   }
   return 0;
@@ -795,6 +810,7 @@ exception_:
   perror("Program Failed Initialization");
   exit (EXIT_FAILURE);
 }
+
 
 void cSIGUSR1_sa (int signal)
 {
