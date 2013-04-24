@@ -12,6 +12,7 @@
 #include <math.h>
 
 #include <unistd.h>
+#include <sys/sem.h>
 #include <signal.h>
 
 /*
@@ -51,6 +52,7 @@ static int nop_hc (void);
 
 static pid_t pid_;
 static int pipe_[2];
+static int sem_;
 pool_s *pool_;
 
 int prcmp (roulette_s *a, roulette_s *b)
@@ -506,18 +508,6 @@ void singlemove (uint64_t *victim)
   srcb = getbit(victim, src);
 }
 
-void pairwise_ex (uint64_t *victim)
-{
-  int backup;
-  uint16_t index1, index2;
-  
-  index1 = rand() % pool_->bitlen;
-  while ((index2 = rand() % pool_->bitlen) == index1);
-  backup = getbit(victim, index1);
-  setbit(victim, index1, getbit(victim, index2));
-  setbit(victim, index2, backup);
-}
-
 int run_ge (wgraph_s *g)
 {
   int i;
@@ -532,7 +522,6 @@ int run_ge (wgraph_s *g)
     THROW_EXCEPTION();
   if (signal(SIGALRM, sigNOP) == SIG_ERR)
     THROW_EXCEPTION();
-  memset (cbuf, 0, sizeof(cbuf));
   pool_s_ (g);
   if (!pool_)
     THROW_EXCEPTION();
@@ -541,6 +530,7 @@ int run_ge (wgraph_s *g)
   pid_ = fork();
   if (pid_) {
     printf ("Now running Genetic Algorithm with chromosome size: %d\n> ", pool_->bitlen);
+    memset (cbuf, 0, sizeof(cbuf));
     cbuf[CBUF_SIZE-1] = UEOF;
     while (1) {
       index = 0;
@@ -552,6 +542,7 @@ int run_ge (wgraph_s *g)
       }
       cbuf[index] = UEOF;
       write(pipe_[1], cbuf, CBUF_SIZE);
+      //race condition
       kill (pid_, SIGUSR1);
       pause ();
     }
@@ -583,11 +574,11 @@ int run_ge (wgraph_s *g)
         else
           dst2 = p2;
         if (dst1 == dst2) {
-          for (rpt = &pool_->rbuf[rand()%POOLSIZE];
+          for (rpt = &pool_->rbuf[rand() % POOLSIZE];
                rpt->ptr == pool_->bestfeasible ||
                rpt->ptr == dst1 ||
                rpt->ptr == dst2
-               ;rpt = &pool_->rbuf[rand()%POOLSIZE]);
+               ;rpt = &pool_->rbuf[rand() % POOLSIZE]);
           rp2 = rpt;
           dst2 = rpt->ptr;
         }
@@ -603,7 +594,7 @@ int run_ge (wgraph_s *g)
 
       }
       computeprob ();
-      ++pool_->gen;
+      pool_->gen++;
     }
   }
   return 0;
@@ -634,24 +625,22 @@ void printgestatus (void)
 
 }
 
-void printsastatus (void)
-{
-  printf("Status at \"Generation\": %llu\n", pool_->gen);
-  
-}
-
 void cSIGUSR1 (int signal)
 {
   int tmpint;
   unsigned char cbuf[CBUF_SIZE];
   gtoken_s *head;
   
+  printf("called signal\n");
   read(pipe_[0], cbuf, CBUF_SIZE);
   head = lex (cbuf);
   if (!head)
     printf ("Illegal Symbols Used\n");
   else {
-    cgeparse ();
+    if (pool_->is_not_ge)
+      csaparse();
+    else
+      cgeparse ();
     freetokens (stream_);
   }
   printf("> ");
@@ -773,9 +762,14 @@ int run_simanneal (wgraph_s *g, int sa_hc)
   int j;
   uint16_t index;
   unsigned char cbuf[CBUF_SIZE];
-  roulette_s *s, *new_s, *extra;
+  roulette_s *s, *new_s;
   
   pool_s_simanneal (g, sa_hc);
+  s = &pool_->rbuf[SIMA_curr];
+  new_s = &pool_->rbuf[SIMA_tmp];
+  s->ptr = pool_->solution;
+  new_s->ptr = &pool_->solution[pool_->solusize];
+  sima_rand(s);
   for (j = 0; j < pool_->solusize; j++)
     pool_->bestfeasible[j] = s->ptr[j];
   if (signal(SIGINT, pSIGINT) == SIG_ERR)
@@ -784,9 +778,20 @@ int run_simanneal (wgraph_s *g, int sa_hc)
     THROW_EXCEPTION();
   if (pipe (pipe_) == -1)
     THROW_EXCEPTION();
+  sem_ = semget(IPC_PRIVATE, 1, SEM_R | SEM_A);
+  if (sem_ == -1)
+    THROW_EXCEPTION();
   pid_ = fork();
+  if (pid_ < 0)
+    THROW_EXCEPTION();
   if (pid_) {
     index = 0;
+    if (sa_hc == SIMULATED_ANNEALING)
+      printf ("Now running Simulated Annealing with solution size: %d\n> ", pool_->bitlen);
+    else
+      printf ("Now running \"Foolish\" Hill Climbing with solution size: %d\n> ", pool_->bitlen);
+    memset (cbuf, 0, sizeof(cbuf));
+    cbuf[CBUF_SIZE-1] = UEOF;
     while ((cbuf[index] = (char)getchar()) != '\n') {
       if (index < CBUF_SIZE-1)
         ++index;
@@ -795,6 +800,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
     }
     cbuf[index] = UEOF;
     write(pipe_[1], cbuf, CBUF_SIZE);
+    // race condition
     kill (pid_, SIGUSR1);
     pause ();
   }
@@ -802,7 +808,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
     if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
       THROW_EXCEPTION();
     if (signal(SIGINT, sigNOP) == SIG_ERR)
-      THROW_EXCEPTION();
+      THROW_EXCEPTION(); 
     while (1) {
       for (i = 0; i < pool_->iterations; i++) {
         pool_->perturb (new_s->ptr);
@@ -815,11 +821,11 @@ int run_simanneal (wgraph_s *g, int sa_hc)
               pool_->bestfeasible[j] = s->ptr[j];
           }
           s->fitness = new_s->fitness;
-          printf("%f %f ",s->fitness, s->fitness);
+          /*printf("%f %f ",s->fitness, s->fitness);
           if (isfeasible(s->ptr))
             printf("feasible\n");
           else
-            printf("not feasible\n");
+            printf("not feasible\n");*/
         }
       }
       pool_->T = pool_->alpha * pool_->T;
@@ -836,7 +842,7 @@ exception_:
 
 int e_pow_sa (void)
 {
-  return (SIMA_RAND() < pow (M_E, (pool_->rbuf[SIMA_best].fitness - pool_->rbuf[SIMA_tmp].fitness) / pool_->T));
+  return (SIMA_RAND() < pow (M_E, (pool_->rbuf[SIMA_curr].fitness - pool_->rbuf[SIMA_tmp].fitness) / pool_->T));
 }
 
 int nop_hc (void)
@@ -844,7 +850,21 @@ int nop_hc (void)
   return 0;
 }
 
-void cSIGUSR1_sa (int signal)
+void printsastatus (void)
 {
-  
+  printf("Status at \"Generation\": %llu\n", pool_->gen);
+  printchrom(pool_->rbuf[SIMA_curr].ptr);
+  printf("\tFitness: %f\n", getfitness(pool_->rbuf[SIMA_curr].ptr));
+  if (isfeasible(pool_->rbuf[SIMA_curr].ptr))
+    printf ("Is Feasible\n");
+  else {
+    printf ("Is not Feasible\n");
+    if (isfeasible(pool_->bestfeasible)) {
+      printf("Best Feasible is: \n");
+      printchrom(pool_->bestfeasible);
+      printf("\tFitness: %f\n", getfitness(pool_->bestfeasible));
+    }
+    else
+      printf ("No 'Good' Feasibles Found.\n");
+  }
 }

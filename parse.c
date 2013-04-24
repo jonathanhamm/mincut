@@ -50,7 +50,6 @@ static void p_show (void);
 static int p_feasible (void);
 
 /* Simulated Annealing Comandline Parsing Routines */
-static void printsa_status (void);
 static int saparam (void);
 static int sashow (void);
 
@@ -264,7 +263,7 @@ gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
 }
 
 
-/*  Graph Grammar:
+/*  Graph Parsing Grammar:
  *  <graph> => <nodelist> <edgelist> EOF
  *  <nodelist> => V={v <nodeparam>}
  *  <nodeparam> => ,v <nodeparam> | epsilon
@@ -709,7 +708,7 @@ int p_feasible (void)
 
 
 /*
- Simulate Annealing Commandline Grammar
+ Simulate Annealing/"Foolish Hill Climbing Commandline Grammar
  
  <cparse>=>
     status | exit | quit | q | Q
@@ -752,7 +751,7 @@ void csaparse (void)
   }
   else if (!strcmp(stream_->lexeme, "status")) {
     GTNEXT();
-    printsa_status();
+    printsastatus();
   }
   else if (!strcmp(stream_->lexeme, "set")) {
     GTNEXT();
@@ -807,11 +806,6 @@ void csaparse (void)
   }
   else
     printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
-}
-
-void printsa_status (void)
-{
-  
 }
 
 int saparam (void)

@@ -16,9 +16,8 @@
 #define SIMA_t0     500
 #define SIMA_alpha  0.80
 #define SIMA_beta   1.05
-#define SIMA_best   0
+#define SIMA_curr   0
 #define SIMA_tmp    1
-#define SIMA_extra  2
 #define SIMA_RAND() (float)rand()/(float)RAND_MAX
 
 #define SIMULATED_ANNEALING 1
@@ -69,11 +68,8 @@ struct pool_s
   uint64_t gen;       /*generation number*/
   uint16_t chromsize; /*size in quad words*/
   uint16_t bitlen;    /*size in bits*/
-  
   uint64_t cmask;     /*bit mask for each chromosome*/
   uint8_t remain;     /*Remainder bits that carry over in new quad word*/
-  pool_s *parent;
-  pool_s *child;
   uint8_t mutateprob;
   wgraph_s *graph;
   uint64_t start;
@@ -89,6 +85,7 @@ struct pool_s
   roulette_s rbuf[POOLSIZE];
   /* Simulated Annealing and Hill Climbing */
   float iterations, T, alpha, beta;
+#define is_not_ge e_pow
 #define perturb mutate
 #define solusize chromsize
 #define solution popul
@@ -122,6 +119,7 @@ extern void mutate2 (uint64_t *victim);
 
 extern void printsolution (int index);
 extern void printgestatus (void);
+extern void printsastatus (void);
 
 /*simulated annealing functions*/
 extern int run_simanneal (wgraph_s *g, int sa_hc);

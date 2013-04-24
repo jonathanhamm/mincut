@@ -7,20 +7,22 @@
 int main (int argc, char **argv) 
 {  
   if (argc != 2) {
-    if (argc == 3) {
-      if (!strcmp(argv[2], "ge"))
-        run_ge (gparse(argv[1]));
-      else if (!strcmp(argv[2], "sa"))
-        run_simanneal (gparse(argv[1]), SIMULATED_ANNEALING);
-      else if (!strcmp(argv[2], "hc"))
-        run_simanneal (gparse(argv[1]), HILL_CLIMBNG);
-      else {
-        printf("Usage: ./ge <filename> <algorithm>");
-        exit (EXIT_FAILURE);
+    if (argc == 4) {
+      if (!strcmp(argv[2], "-a")) {
+        if (!strcmp(argv[3], "ge"))
+          run_ge (gparse(argv[1]));
+        else if (!strcmp(argv[3], "sa"))
+          run_simanneal (gparse(argv[1]), SIMULATED_ANNEALING);
+        else if (!strcmp(argv[3], "hc"))
+          run_simanneal (gparse(argv[1]), HILL_CLIMBNG);
+        else {
+          printf("Usage: ./ge <filename> -a <algorithm>");
+          exit (EXIT_FAILURE);
+        }
       }
     }
     else {
-      printf("Usage: ./ge <filename> <algorithm>");
+      printf("Usage: ./ge <filename> -a <algorithm>");
       exit (EXIT_FAILURE);
     }
   }
