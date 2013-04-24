@@ -4,12 +4,19 @@
 #include <stdlib.h>
 #include <string.h>  
 
+/* Genetic Algorithm Commandline Constants */
 #define COM_ERR   0
 #define COM_PROB  1
 #define COM_OP    2
 #define COM_X     3
 #define COM_SEL   4
 #define COM_K     5
+
+/* Simulated Annealing Commandline Constants */
+#define COM_T 1
+#define COM_ITER 2
+#define COM_ALPHA 3
+#define COM_BETA 4
 
 vhash_s vhash_;
 gtoken_s *stream_;
@@ -36,11 +43,16 @@ static void e_ (wgraph_s *g);
 static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
 static void printbyte (uint8_t b);
 
-/* Commandline Parsing Routines */
+/* Genetic Algorithm Commandline Parsing Routines */
 static int  p_op (void);
 static int  p_mutate (void);
 static void p_show (void);
 static int p_feasible (void);
+
+/* Simulated Annealing Comandline Parsing Routines */
+static void printsa_status (void);
+static int saparam (void);
+static void sashow (void);
 
 
 wgraph_s *gparse (const unsigned char *file)
@@ -718,6 +730,9 @@ int p_feasible (void)
  */
 void csaparse (void)
 {
+  int result;
+  float val;
+  
   if (
       !strcmp (stream_->lexeme, "exit")  ||
       !strcmp (stream_->lexeme, "quit")  ||
@@ -733,14 +748,83 @@ void csaparse (void)
   }
   else if (!strcmp(stream_->lexeme, "status")) {
     GTNEXT();
-    
+    printsa_status();
   }
   else if (!strcmp(stream_->lexeme, "set")) {
     GTNEXT();
-  } 
+    result = saparam();
+    GTNEXT();
+    if (stream_->type == T_NUM)
+      val = atof (stream_->lexeme);
+    else {
+      printf ("Expected number, but got '%s'.\n", stream_->lexeme);
+      return;
+    }
+    switch (result) {
+      case COM_T:
+        pool_->T = val;
+        break;
+      case COM_ITER:
+        pool_->iterations = val;
+        break;
+      case COM_ALPHA:
+        pool_->alpha = val;
+        break;
+      case COM_BETA:
+        pool_->beta = val;
+        break;
+      default:
+        break;
+    }
+  }
   else if (!strcmp(stream_->lexeme, "get")) {
     GTNEXT();
+    result = saparam();
+    switch (result) {
+      case COM_T:
+        printf ("Temperature currently set to: %f\n", pool_->T);
+        break;
+      case COM_ITER:
+        printf ("Number of iterations currently set to: %f\n", pool_->iterations);
+        break;
+      case COM_ALPHA:
+        printf ("Alpha currently set to: %f\n", pool_->alpha);
+        break;
+      case COM_BETA:
+        printf ("Beta currently set to: %f\n", pool_->beta);
+        break;
+      default:
+        break;
+    }
+  }
+  else if (!strcmp (stream_->lexeme, "show")) {
+    
   }
   else
     printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
+}
+
+void printsa_status (void)
+{
+  
+}
+
+int saparam (void)
+{
+  GTNEXT();
+  if (!strcmp(stream_->lexeme, "temp"))
+    return COM_T;
+  if (!strcmp(stream_->lexeme, "iter"))
+    return COM_ITER;
+  if (!strcmp(stream_->lexeme, "alpha"))
+    return COM_ALPHA;
+  if (!strcmp(stream_->lexeme, "beta"))
+    return COM_BETA;
+  printf ("Expected 'temp', 'iter', 'alpha', or 'beta', but got %s\n", stream_->lexeme);
+  return COM_ERR;
+}
+
+void sashow (void)
+{
+  
 }
