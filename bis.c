@@ -32,6 +32,10 @@ struct solset_s
   solset_s *next;
 };
 
+static pid_t pid_;
+static int pipe_[2];
+pool_s *pool_;
+
 /* Signal Handlers */
 static void sigNOP (int signal) {}
 static void cSIGUSR1 (int signal);
@@ -49,11 +53,6 @@ static void printchrom (uint64_t *chrom);
 
 static int e_pow_sa (void);
 static int nop_hc (void);
-
-static pid_t pid_;
-static int pipe_[2];
-static int sem_;
-pool_s *pool_;
 
 int prcmp (roulette_s *a, roulette_s *b)
 {
@@ -519,14 +518,14 @@ int run_ge (wgraph_s *g)
   unsigned char cbuf[CBUF_SIZE];
   
   if (signal(SIGINT, pSIGINT) == SIG_ERR)
-    THROW_EXCEPTION();
-  if (signal(SIGALRM, sigNOP) == SIG_ERR)
-    THROW_EXCEPTION();
+    throw_exception();
+  if (signal(SIGUSR1, sigNOP) == SIG_ERR)
+    throw_exception();
   pool_s_ (g);
   if (!pool_)
-    THROW_EXCEPTION();
+    throw_exception();
   if (pipe (pipe_) == -1)
-    THROW_EXCEPTION();
+    throw_exception();
   pid_ = fork();
   if (pid_) {
     printf ("Now running Genetic Algorithm with chromosome size: %d\n> ", pool_->bitlen);
@@ -544,14 +543,14 @@ int run_ge (wgraph_s *g)
       write(pipe_[1], cbuf, CBUF_SIZE);
       //race condition
       kill (pid_, SIGUSR1);
-      pause ();
+      pause();
     }
   }
   else {
     if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
-      THROW_EXCEPTION();
+      throw_exception();
     if (signal(SIGINT, sigNOP) == SIG_ERR)
-      THROW_EXCEPTION();
+      throw_exception();
     n = pool_->chromsize;
     pool_->start = clock();
     while (1) {
@@ -645,7 +644,7 @@ void cSIGUSR1 (int signal)
   }
   printf("> ");
   fflush (stdout);
-  kill(getppid(), SIGALRM);
+  kill(getppid(), SIGUSR1);
 }
 
 void pSIGINT (int signal)
@@ -773,17 +772,14 @@ int run_simanneal (wgraph_s *g, int sa_hc)
   for (j = 0; j < pool_->solusize; j++)
     pool_->bestfeasible[j] = s->ptr[j];
   if (signal(SIGINT, pSIGINT) == SIG_ERR)
-    THROW_EXCEPTION();
-  if (signal(SIGALRM, sigNOP) == SIG_ERR)
-    THROW_EXCEPTION();
+    throw_exception();
+  if (signal(SIGUSR1, sigNOP) == SIG_ERR)
+    throw_exception();
   if (pipe (pipe_) == -1)
-    THROW_EXCEPTION();
-  sem_ = semget(IPC_PRIVATE, 1, SEM_R | SEM_A);
-  if (sem_ == -1)
-    THROW_EXCEPTION();
+    throw_exception();
   pid_ = fork();
   if (pid_ < 0)
-    THROW_EXCEPTION();
+    throw_exception();
   if (pid_) {
     index = 0;
     if (sa_hc == SIMULATED_ANNEALING)
@@ -792,23 +788,25 @@ int run_simanneal (wgraph_s *g, int sa_hc)
       printf ("Now running \"Foolish\" Hill Climbing with solution size: %d\n> ", pool_->bitlen);
     memset (cbuf, 0, sizeof(cbuf));
     cbuf[CBUF_SIZE-1] = UEOF;
-    while ((cbuf[index] = (char)getchar()) != '\n') {
-      if (index < CBUF_SIZE-1)
-        ++index;
-      else
-        printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
+    while (1) {
+      index = 0;
+      while ((cbuf[index] = (char)getchar()) != '\n') {
+        if (index < CBUF_SIZE-1)
+          ++index;
+        else
+          printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
+      }
+      cbuf[index] = UEOF;
+      write(pipe_[1], cbuf, CBUF_SIZE);
+      kill (pid_, SIGUSR1);
+      pause();
     }
-    cbuf[index] = UEOF;
-    write(pipe_[1], cbuf, CBUF_SIZE);
-    // race condition
-    kill (pid_, SIGUSR1);
-    pause ();
   }
   else {
     if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
-      THROW_EXCEPTION();
+      throw_exception();
     if (signal(SIGINT, sigNOP) == SIG_ERR)
-      THROW_EXCEPTION(); 
+      throw_exception(); 
     while (1) {
       for (i = 0; i < pool_->iterations; i++) {
         pool_->perturb (new_s->ptr);

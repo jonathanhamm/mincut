@@ -79,16 +79,16 @@ unsigned char *read_gfile (const char *fname)
   
   f = fopen(fname,"r");
   if(!f)
-    THROW_EXCEPTION();
+    throw_exception();
   buf = malloc(INITBUFSIZE);
   if (!buf)
-    THROW_EXCEPTION();
+    throw_exception();
   for (bsize = INITBUFSIZE, offset = 0; (buf[offset] = (unsigned char)fgetc(f)) != UEOF; offset++) {
     if (offset == bsize-1) {
       bsize += INITBUFSIZE;
       buf = realloc (buf, bsize);
       if (!buf)
-        THROW_EXCEPTION();
+        throw_exception();
     }
   }
   /*truncate buffer to EOF*/
@@ -188,7 +188,7 @@ gtoken_s *lex (unsigned char *buf)
                || (*buf >= '0' && *buf <= '9'); buf++) {
             if (buf - bckptr == MAXLEXLEN) {
               printf("Too Long ID: %15s", bckptr);
-              THROW_EXCEPTION();
+              throw_exception();
             }
           }
           backup = *buf;
@@ -199,14 +199,14 @@ gtoken_s *lex (unsigned char *buf)
           for (bckptr = buf, buf++; (*buf >= '0' && *buf <= '9'); buf++) {
             if (buf - bckptr == MAXLEXLEN) {
               printf("Too Long ID: %15s", bckptr);
-              THROW_EXCEPTION();
+              throw_exception();
             }
           }
           if (*buf == '.') {
             for (buf++; (*buf >='0' && *buf <= '9'); buf++) {
               if (buf - bckptr == MAXLEXLEN) {
                 printf("Too Long ID: %15s", bckptr);
-                THROW_EXCEPTION();
+                throw_exception();
               }
             }
           }
@@ -216,7 +216,7 @@ gtoken_s *lex (unsigned char *buf)
           *buf = backup;
         } else {
           printf("Symbol Error %c\n", *bckptr);
-          THROW_EXCEPTION();
+          throw_exception();
         }
         break;
     }
@@ -357,12 +357,12 @@ void e_ (wgraph_s *g)
   if (GTNEXT()->type == T_ID) {
     v1 = v_lookup (g, stream_->lexeme);
     if (!v1)
-      THROW_EXCEPTION();
+      throw_exception();
     if (GTNEXT()->type == T_COMMA)
     if (GTNEXT()->type == T_ID) {
       v2 = v_lookup (g, stream_->lexeme);
       if (!v2)
-        THROW_EXCEPTION();
+        throw_exception();
       if (GTNEXT()->type == T_COMMA)
       if (GTNEXT()->type == T_NUM) {
         weight = atof(stream_->lexeme);
@@ -421,9 +421,9 @@ edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
   
   edge = malloc(sizeof(*edge));
   if (!edge)
-    THROW_EXCEPTION();
+    throw_exception();
   if (!(addedge(v1,edge) && addedge(v2,edge)))
-    THROW_EXCEPTION();
+    throw_exception();
   edge->v1 = v1;
   edge->v2 = v2;
   edge->weight = weight;
@@ -443,14 +443,14 @@ int insert_vertex (wgraph_s *graph, vertex_s *v)
   if (!vtable) {
     vtable = calloc(INITTSIZE, sizeof(*vtable));
     if (!vtable)
-      THROW_EXCEPTION();
+      throw_exception();
     cvtablesize = INITTSIZE;
   } else {
     if (graph->nvert == cvtablesize) {
       cvtablesize += INITTSIZE;
       vtable = realloc (vtable, cvtablesize * sizeof(*vtable));
       if (!vtable)
-        THROW_EXCEPTION();
+        throw_exception();
     }
   }
   vtable[graph->nvert] = v;
@@ -745,7 +745,7 @@ void csaparse (void)
       )
   {
     printf("Final:\n");
-    printgestatus ();
+    printsastatus ();
     kill(getppid(), SIGQUIT);
     exit(EXIT_SUCCESS);
   }

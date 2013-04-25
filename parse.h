@@ -31,7 +31,7 @@
 #define T_EQU        6
 #define T_EOF        7
 
-#define THROW_EXCEPTION() goto exception_
+#define throw_exception() goto exception_
 
 #define IDCPY(DST,SRC)    *(uint64_t *)DST = *(uint64_t *)SRC; \
                           *(((uint64_t *)DST) + 1) = *(((uint64_t *)SRC) + 1)
