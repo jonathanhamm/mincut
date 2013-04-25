@@ -765,12 +765,12 @@ int run_ge (wgraph_s *g)
             computeprob ();
             pool_->gen++;
 #ifdef TESTMODE
-            if (pool_->rbuf[POOLSIZE-1].fitness == OPTIMAL) {
-                printf ("\nFound Optimal\n");
-                printgestatus ();
-                kill(getppid(), SIGQUIT);
-                exit(EXIT_SUCCESS);
-            }
+            if (pool_->rbuf[POOLSIZE-1].fitness == OPTIMAL)
+                EXITOPTGE();
+#ifdef MGEN
+            if (pool_->gen >= MAX_GENERATIONS)
+                EXITGENGE();
+#endif
 #endif
         }
     }
@@ -867,6 +867,14 @@ int run_simanneal (wgraph_s *g, int sa_hc)
                     s->fitness = new_s->fitness;
                 }
                 pool_->nperturbations++;
+#ifdef TESTMODE
+                if (pool_->rbuf[POOLSIZE-1].fitness == OPTIMAL)
+                    EXITOPTSA();
+#ifdef MGEN
+                if (pool_->gen >= MAX_GENERATIONS)
+                    EXITGENSA();
+#endif
+#endif
             }
             pool_->T = pool_->alpha * pool_->T;
             pool_->iterations = pool_->beta * pool_->iterations;
@@ -1005,7 +1013,7 @@ void printgestatus (void)
 
 void printsastatus (void)
 {
-    printf("Status at \"Generation\": %llu\n", pool_->gen);
+    printf("Status at Perturbation: %llu\n", pool_->gen);
     printchrom(pool_->rbuf[SIMA_curr].ptr);
     printf("\tFitness: %f\n", getfitness(pool_->rbuf[SIMA_curr].ptr));
     if (isfeasible(pool_->rbuf[SIMA_curr].ptr))

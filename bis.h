@@ -13,10 +13,43 @@
 #include <stdint.h>
 #include <time.h>
 
+/* Preprocessor Macros Soley for Inserting Code for testing Algorithm */
 #define TESTMODE
 //#undef TESTMODE
 #ifdef TESTMODE
     #define OPTIMAL 32.0
+    #define MGEN
+    //#undef MGEN
+    #define MAX_GENERATIONS 1000
+    #define EXITOPTGE()  {\
+                        printf ("\nFound Optimal\n"); \
+                        printgestatus (); \
+                        printsolution (-1, pool_->bestfeasible); \
+                        kill(getppid(), SIGQUIT); \
+                        exit(EXIT_SUCCESS);\
+                        }
+    #define EXITGENGE()   {\
+                        printf ("\nMaximum # Generations Reached\n"); \
+                        printgestatus (); \
+                        printsolution (-1, pool_->bestfeasible); \
+                        kill(getppid(), SIGQUIT); \
+                        exit(EXIT_SUCCESS);\
+                        }
+
+    #define EXITOPTSA() {\
+                        printf ("\nFound Optimal\n"); \
+                        printsastatus (); \
+                        printsolution (-1, pool_->bestfeasible); \
+                        kill(getppid(), SIGQUIT); \
+                        exit(EXIT_SUCCESS);\
+                        }
+    #define EXITGENSA() {\
+                        printf ("\nMaximum # Generations Reached\n"); \
+                        printsastatus (); \
+                        printsolution (-1, pool_->bestfeasible); \
+                        kill(getppid(), SIGQUIT); \
+                        exit(EXIT_SUCCESS);\
+                        }
 #endif
 
 /* Genetic algorithm constatns and macros */
