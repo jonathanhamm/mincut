@@ -13,6 +13,12 @@
 #include <stdint.h>
 #include <time.h>
 
+#define TESTMODE
+//#undef TESTMODE
+#ifdef TESTMODE
+    #define OPTIMAL 32.0
+#endif
+
 /* Genetic algorithm constatns and macros */
 #define CR_N 2
 #define MDIV_CONST 5
@@ -26,9 +32,9 @@
 #define PSIZE_ROUL_DIV 5
 
 #if POOLSIZE / PSIZE_ROUL_DIV == 0
-#define NSELECT 1
+    #define NSELECT 1
 #else
-#define NSELECT (POOLSIZE / PSIZE_ROUL_DIV)
+    #define NSELECT (POOLSIZE / PSIZE_ROUL_DIV)
 #endif
 
 #define GET_CHRBYSIZE(pool) ((pool->chromsize / 8) + \
@@ -119,6 +125,7 @@ struct pool_s
 #define perturb mutate
 #define solusize chromsize
 #define solution popul
+#define nperturbations gen
     /* Population. This is contiguously appended at the end of the structure at runtime. */
     uint64_t popul[0];
 };

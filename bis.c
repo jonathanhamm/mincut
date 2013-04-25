@@ -281,9 +281,10 @@ int iscut(uint64_t *chrom, vertex_s *v)
  bits. Unset bits can be skipped using a processor's 
  find-first-set-bit instruction (many architectures have
  an instruction that can find the first set bit in a 
- register, Intel's is 'bsf'). The call to ffsl returns
- the position of the first set bit. The compiler inlines
- this function so it's just an instruction. The bit 
+ register, Intel's is 'bsf'). The processed set bits 
+ are then masked out to zero in the loop. The call to ffsl 
+ returns the position of the first set bit. The compiler 
+ inlines this function so it's just the instruction. The bit 
  position can be used to access a vertex in the graph. Then
  the function looks at every edge connected to the graph, and
  checks if it's cut, summing the cut edges. 
@@ -763,6 +764,14 @@ int run_ge (wgraph_s *g)
             }
             computeprob ();
             pool_->gen++;
+#ifdef TESTMODE
+            if (pool_->rbuf[POOLSIZE-1].fitness == OPTIMAL) {
+                printf ("\nFound Optimal\n");
+                printgestatus ();
+                kill(getppid(), SIGQUIT);
+                exit(EXIT_SUCCESS);
+            }
+#endif
         }
     }
     return 0;
@@ -857,10 +866,10 @@ int run_simanneal (wgraph_s *g, int sa_hc)
                     }
                     s->fitness = new_s->fitness;
                 }
+                pool_->nperturbations++;
             }
             pool_->T = pool_->alpha * pool_->T;
             pool_->iterations = pool_->beta * pool_->iterations;
-            pool_->gen++;
         }
     }
     return 0;
