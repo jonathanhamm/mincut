@@ -1,3 +1,15 @@
+/*
+ main.c 
+ Author: Jonathan Hamm
+ 
+ Description:
+ 
+ This simply has the main function of the progran. It 
+ accepts commandline arguments which specify what file to
+ open (containing the graph data), and what algorithm to use. 
+ It then calls the appropriate functions. 
+ */
+
 #include "parse.h"
 #include "bis.h"
 #include <stdio.h>

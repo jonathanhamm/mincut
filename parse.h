@@ -1,14 +1,10 @@
 /*
- gparse.h
+ parse.h
  Author: Jonathan Hamm
  
  Description:
  
- This library is exclusively for routines that read and parse data so the genetic algorithm
- can use it. This contains functions for file io, parsing graph data, and parsing command line
- data. Command line data are commands sent to the GA during runtime from the terminal. These
- are mostly for printing results and setting parameters while the algorithm is running. This
- also contains functions for creating the graph data structure used by the GA.
+ Library implemented by parse.c
  */
 
 #ifndef _GPARSE_H_
@@ -21,8 +17,9 @@
 #define INITBUFSIZE 256
 #define MAXLEXLEN 15
 #define INITTSIZE 32
+#define VHTABLESIZE 233
 
-/*TTYPES*/
+/*Token Types*/
 #define T_ID         1
 #define T_NUM        2
 #define T_OPENBRACE  3
@@ -39,17 +36,16 @@
 #define GTNEXT() (stream_ = stream_->next)
 #define GTPREV() (stream_ = stream_->prev)
 
-
 typedef struct gnode_s gnode_s;
 typedef struct wgraph_s wgraph_s;
 typedef struct gtoken_s gtoken_s;
 typedef struct vertex_s vertex_s;
 typedef struct edge_s edge_s;
 
-#define VHTABLESIZE 233
 typedef struct vhash_s vhash_s;
 typedef struct vrec_s vrec_s;
 
+/* Graph Data Structure */
 struct wgraph_s
 {
     uint16_t  nedges;
@@ -57,7 +53,7 @@ struct wgraph_s
     vertex_s  **vtable;
 };
 
-
+/* Token structure */
 struct gtoken_s
 {
     unsigned short type;
@@ -66,6 +62,7 @@ struct gtoken_s
     gtoken_s *next;
 };
 
+/* Graph vertex Structure */
 struct vertex_s
 {
     unsigned char name[MAXLEXLEN + 1];
@@ -73,6 +70,7 @@ struct vertex_s
     edge_s **edges;
 };
 
+/* Graph Edge Structure */
 struct edge_s
 {
     float weight;
@@ -80,6 +78,7 @@ struct edge_s
     vertex_s *v2;
 };
 
+/* Record in hash table for vertex indices */
 struct vrec_s
 {
     vertex_s *v;
@@ -90,13 +89,15 @@ struct vrec_s
     };
 };
 
+/* Hash Table for vertex indices. */
 struct vhash_s
 {
     vrec_s table[VHTABLESIZE];
 };
 
-extern vhash_s vhash_;
-extern gtoken_s *stream_;
+/* Global Variables */
+extern vhash_s vhash_;      //vertex hash
+extern gtoken_s *stream_;   //linked list of tokens (token stream)
 
 /* Graph Parsing Routines */
 extern wgraph_s *gparse (const unsigned char *file);

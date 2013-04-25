@@ -1,6 +1,15 @@
 /*
- * Main GA Engine
- * Author: Jonathan Hamm
+ bis.c
+ Author: Jonathan Hamm
+ 
+ Description: 
+ 
+ This file contains the main genetic algorithm code, simulated 
+ annealing code, and foolish hill climbing code. This includes 
+ selection functions, crossover functions, mutation operators, 
+ fitness functions, perturbation functions, and the main loops 
+ for the genetic algorithm, simulated annealing, and foolish
+ hill climbing. 
  */
 
 #include "parse.h"
@@ -16,7 +25,7 @@
 #include <signal.h>
 
 /*
- Counts the set bits in a long word:
+ Counts the set bits in a 32-bit long word:
  32-bit count code obtained from:
  http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
  */
@@ -32,6 +41,7 @@ struct solset_s
     solset_s *next;
 };
 
+/* Global Variables */
 static pid_t pid_;
 static int pipe_[2];
 pool_s *pool_;
@@ -45,7 +55,7 @@ static uint8_t getbit (uint64_t *chrom, uint16_t pos);
 static void setbit (uint64_t *chrom, uint16_t pos, uint8_t val);
 
 /* Fitness Evaluation Functions */
-static int countdigits(uint64_t *cptr);
+static uint16_t countdigits(uint64_t *cptr);
 static int iscut(uint64_t *chrom, vertex_s *v);
 static double sumweights (uint64_t *chrom);
 static double getfitness (uint64_t *chrom);
@@ -57,13 +67,14 @@ static int isfeasible (uint64_t *chrom);
 static int bsearch_r (roulette_s *roul, uint32_t key);
 
 /* Simulated Annealing and Foolish Hill Climbing Functions */
+static void sima_rand (roulette_s *dst);
 static int e_pow_sa (void);
 static int nop_hc (void);
 
 /* Signal Handlers */
-static void sigNOP (int signal) {}
 static void cSIGUSR1 (int signal);
 static void pSIGINT (int signal);
+static void sigNOP (int signal);
 
 /* Printing Functions */
 static void printqword (uint64_t lword, uint8_t mask);
@@ -74,6 +85,8 @@ static void print_solset (solset_s *solset);
 /*
  "Constructor" for pool_s structure. This simply initializes a pool
  of chromosomes for the genetic algorithm.
+ 
+ @param g   Pointer to graph data structure used to initialize pool.
  */
 void pool_s_ (wgraph_s *g)
 {
@@ -88,6 +101,11 @@ void pool_s_ (wgraph_s *g)
     }
     pool_->chromsize = (g->nvert / 64) + (g->nvert % 64 != 0);
     pool_->remain = g->nvert % 64;
+    /* 
+     For chromosomes that don't align with 64 bits, the extra bits
+     in the partially filled (last quad word) 64-bit word need to be
+     masked out. This code creates the mask. 
+     */
     if (!(g->nvert % 64) && g->nvert)
         pool_->cmask = 0xffffffffffffffffllu;
     else {
@@ -100,6 +118,7 @@ void pool_s_ (wgraph_s *g)
     pool_->k = TOURN_K;
     pool_->gen = 0;
     ptr = pool_->popul;
+    /* Initialize Chromosomes Randomly */
     for (i = 0; i < POOLSIZE; i++) {
         for (j = 0; j < pool_->chromsize; j++, ptr++) {
             ((uint16_t *)ptr)[0] = (uint16_t)rand();
@@ -130,6 +149,12 @@ void pool_s_ (wgraph_s *g)
     pool_->fitsum = sum;
 }
 
+/*
+ "Constructor" for simulated annealing and hill climbing "pool" (1 chromosome). 
+ 
+ @param g       Pointer to graph data structure used to initialize pool.
+ @param sa_hc   A boolean indicating if this is simulated annealing or hill climbing. 
+ */
 void pool_s_simanneal (wgraph_s *g, int sa_hc)
 {
     int i;
@@ -142,6 +167,11 @@ void pool_s_simanneal (wgraph_s *g, int sa_hc)
     pool_->solusize = (g->nvert / 64) + (g->nvert % 64 != 0);
     pool_->remain = g->nvert % 64;
     pool_->bitlen = ((pool_->remain) ? ((pool_->chromsize * 64) - (64 - pool_->remain)) : pool_->chromsize*64);
+    /*
+     For solutions that don't align with 64 bits, the extra bits
+     in the partially filled (last quad word) 64-bit word need to be
+     masked out. This code creates the mask. 
+     */
     if (!(g->nvert % 64) && g->nvert)
         pool_->cmask = 0xffffffffffffffffllu;
     else {
@@ -165,11 +195,27 @@ void pool_s_simanneal (wgraph_s *g, int sa_hc)
     }
 }
 
+/*
+ Returns a bit value from a chromosome at the
+ position specified by 'pos'.
+ 
+ @param chrom   Chromosome to look at. 
+ @param pos     Position in chromosome. 
+ @return        Returns the bit value at position 'pos'. 
+ */
 uint8_t getbit (uint64_t *chrom, uint16_t pos)
 {
     return (chrom[pos / 64] >> (pos % 64)) & 1llu;
 }
 
+/*
+ Sets a bit from a chromosome at the position specified 
+ by 'pos'.
+ 
+ @param chrom   Chromosome to to set bit in. 
+ @param pos     Position in chromosome to set bit. 
+ @param val     Value to set chromosome to. 
+ */
 void setbit (uint64_t *chrom, uint16_t pos, uint8_t val)
 {
     chrom[pos / 64] &= ~(1llu << (pos % 64));
@@ -177,7 +223,13 @@ void setbit (uint64_t *chrom, uint16_t pos, uint8_t val)
         chrom[pos / 64] |= (1llu << (pos % 64));
 }
 
-int countdigits (uint64_t *cptr)
+/*
+ Counts the number of set bits in a chromosome. 
+ 
+ @param cptr    Chromosome to count bits for. 
+ @return        Returns the number of set bits in chromosome. 
+ */
+uint16_t countdigits (uint64_t *cptr)
 {
     int i, count, n;
     
@@ -191,6 +243,22 @@ int countdigits (uint64_t *cptr)
     return count;
 }
 
+/*
+ Determines if a vertex is in the set of cut vertices (in
+ other words, the vertices on the 'other side' of the 
+ graph bisection). If it is on the 'other side', there is
+ a cut. This locates the index of the specified vertex in
+ the graph data structure (graph indices correspond to the 
+ bit position of the vertex in the chromosome). The index is
+ obtained from a hash to alleviate search overhead. Then the 
+ function checks if that index/bit position is unset in the 
+ chromosome. If it is unset, there is a cut. 
+ 
+ @param chrom   Chromosome to function is looking in. 
+ @param v       Vertex function is checking. 
+ @return        Returns 1 if there is a cut, and 0 if no
+                cut.
+ */
 int iscut(uint64_t *chrom, vertex_s *v)
 {
     uint16_t i, nvert;
@@ -204,6 +272,26 @@ int iscut(uint64_t *chrom, vertex_s *v)
     return 0;
 }
 
+/*
+ Sums the weights of all cut edges in a chromosome. 
+ 
+ Implementation Description: This works by taking 
+ each quad word (64 bit word) of the chromosome, and 
+ looping through all the set bits, skipping the unset
+ bits. Unset bits can be skipped using a processor's 
+ find-first-set-bit instruction (many architectures have
+ an instruction that can find the first set bit in a 
+ register, Intel's is 'bsf'). The call to ffsl returns
+ the position of the first set bit. The compiler inlines
+ this function so it's just an instruction. The bit 
+ position can be used to access a vertex in the graph. Then
+ the function looks at every edge connected to the graph, and
+ checks if it's cut, summing the cut edges. 
+ 
+ @param chrom   Chromosome function is summing the 
+                weights of cut edges for. 
+ @return        Returns the sum of all cut weights. 
+ */
 double sumweights (uint64_t *chrom)
 {
     uint8_t pos;
@@ -236,6 +324,14 @@ double sumweights (uint64_t *chrom)
     return weight;
 }
 
+/*
+ Gets the fitness of a chromosome. This sums the weights of all
+ cut edges, and then applies a fitness penalty if the chromosome 
+ isn't feasible. 
+ 
+ @param chrom   Chromosome to get the fitness of. 
+ @return        Returns the fitness of the chromosome. 
+ */
 double getfitness (uint64_t *chrom)
 {
     int setcount, differ;
@@ -245,6 +341,18 @@ double getfitness (uint64_t *chrom)
     return sumweights (chrom) + (differ << 4);
 }
 
+/*
+ This is just a callback function that is passed to
+ stdlib's qsort (quicksort) function. This compares
+ the probabilities of chromosomes being selected. 
+ 
+ @param a   First structure containing a chromosome and
+            its probability. 
+ @param b   Second structure containing a chromosome and
+            its probability. 
+ @return    Returns -1 if a < b, 1 if a > b, and 0 if they
+            are equal.
+ */
 int prcmp (roulette_s *a, roulette_s *b)
 {
     if (a->prob < b->prob)
@@ -254,6 +362,10 @@ int prcmp (roulette_s *a, roulette_s *b)
     return 0;
 }
 
+/*
+ Computes the probability of all chromosome of being selected. Sorts
+ chromosomes based on probability. 
+ */
 void computeprob (void)
 {
     uint16_t i, n;
@@ -269,6 +381,12 @@ void computeprob (void)
         pool_->bestfeasible = pool_->rbuf[POOLSIZE-1].ptr;
 }
 
+/* 
+ Checks of a chromosome is feasible or not. 
+ 
+ @param chrom   Chromosome to check if feasible. 
+ @return        Returns 1 if feasible, and 0 if not. 
+ */
 int isfeasible (uint64_t *chrom)
 {
     if (pool_->bitlen % 2)
@@ -279,6 +397,13 @@ int isfeasible (uint64_t *chrom)
         return  (2 * countdigits (chrom) == pool_->bitlen);
 }
 
+/*
+ Roulette selection function. 
+ 
+ @param parents A pointer to an array of parents
+                that this method will fill when
+                selecting parents. 
+ */
 void roulette_sf (selected_s *parents)
 {
     int i, j;
@@ -301,7 +426,13 @@ void roulette_sf (selected_s *parents)
 
 /*
  Iterative Binary search that returns the index of rank 'region'
- that 'key' fits into.
+ that 'key' fits into. This is used for rank selection, which indexes 
+ a cumulative probabily distribution. The binary search alleviates some
+ of the overhead of matching the random value generated by rank_sf. 
+ 
+ @param roul    Array to search in. 
+ @param key     Search key. 
+ @return        Returns the index that will contain a selected parent.  
  */
 int bsearch_r (roulette_s *roul, uint32_t key)
 {
@@ -322,6 +453,13 @@ int bsearch_r (roulette_s *roul, uint32_t key)
     return mid;
 }
 
+/*
+ Rank Selection function. 
+ 
+ @param parents A pointer to an array of parents
+                that this method will fill when
+                selecting parents.
+ */
 void rank_sf (selected_s *parents)
 {
     int i;
@@ -336,6 +474,13 @@ void rank_sf (selected_s *parents)
     }
 }
 
+/*
+ Tournament selection function. 
+ 
+ @param parents A pointer to an array of parents
+                that this method will fill when
+                selecting parents.
+ */
 void tournament_sf (selected_s *parents)
 {
     int       i;
@@ -372,6 +517,19 @@ void tournament_sf (selected_s *parents)
     }
 }
 
+/*
+ Performs an n-point crossover, where 'n' is specified by the macro
+ constant CR_N. 
+ 
+ Note:  dst1 and dst2 will usually equal p1 and p2, correspdoningly,
+        but these sometimes have to change in order to guaruntee 
+        elitism. 
+ 
+ @param p1      Parent 1 chromosome.
+ @param p2      Parent 2 chromosome.
+ @param dst1    Destination chromosome 1. 
+ @param dst2    Destination chromosome 2. 
+ */
 void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
 {
     int i, j, pindex;
@@ -400,7 +558,13 @@ void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
 }
 
 /*
- p1 p2  mask  | f
+ Uniform Crossover: Performs a uniform crossover where 'mask' is the 
+ randomly generated bit string used to select from parents. Instead of
+ looping through each allele, this can be performed 64 bits/alleles at 
+ a time (with a 64-bit processor). The truth table below shows how a 
+ short expression/function was derived for this.  
+ 
+ p1 p2  mask  | Child
  ----------------
  0  0   0     | 0
  0  0   1     | 0
@@ -410,16 +574,18 @@ void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
  1  0   1     | 0
  1  1   0     | 1
  1  1   1     | 1
+  
+ Child1 = (~mask & p1) | (mask  & p2)
+ Child2 = (mask  & p1) | (~mask & p2)
  
- Karnough Map
- 00 01 11 10
- ---------------
- 0|  0  0  1  1
- 1|  0  1  1  0
+ Note:  dst1 and dst2 will usually equal p1 and p2, correspdoningly,
+ but these sometimes have to change in order to guaruntee
+ elitism.
  
- f = (~mask & p1) | p2
- 
- Uniform Crossover
+ @param p1      Parent 1 chromosome.
+ @param p2      Parent 2 chromosome.
+ @param dst1    Destination chromosome 1.
+ @param dst2    Destination chromosome 2.
  */
 void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
 {
@@ -437,13 +603,21 @@ void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
     }
 }
 
+/*
+ First mutation operator. Randomly inverts n bits, where 'n'
+ is a random number of bits out of the chromosome. 'n' is bounded
+ by dividing the chromosome length by a constant 'MDIV_CONST'. The
+ position of these bits are randomly generated. 
+ 
+ @param victim  Target chromosome to be mutated. 
+ */
 void mutate1 (uint64_t *victim)
 {
     int i, n;
     uint16_t index;
     
-    n = rand() % (pool_->bitlen / 5);
-    if (!isfeasible(victim))
+    n = rand() % (pool_->bitlen / MDIV_CONST);
+    if (!(n % 2) && !isfeasible(victim))
         ++n;
     for (i = 0; i < n; i++) {
         index = rand() % pool_->bitlen;
@@ -451,26 +625,50 @@ void mutate1 (uint64_t *victim)
     }
 }
 
+/*
+ Second mutation operator. Inverts a set number of bits
+ determined by the NM_BITS macro constant. The positions 
+ of these bits are randomly generated. 
+ 
+ @param victim  Target chromosome to be mutated.
+ */
 void mutate2 (uint64_t *victim)
 {
     uint16_t index, i;
     
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < NM_BITS; i++) {
         index = rand() % pool_->bitlen;
         victim[index / 64] ^= (1llu << (index % 64));
     }
 }
 
-void singlemove (uint64_t *victim)
+/*
+ The Pairwise Exchange perturbation function (could also be
+ used as a mutation operator). This simply swaps two bits 
+ from two random positions. 
+ 
+ @param victim  Target chromosome to be mutated/perturbed.
+ */
+void pairwise_ex (uint64_t *victim)
 {
-    uint8_t srcb, dstb;
-    uint16_t src, dst;
+    int backup;
+    uint16_t index1, index2;
     
-    src = rand() % pool_->bitlen;
-    while ((dst = rand() % pool_->bitlen) == src);
-    srcb = getbit(victim, src);
+    index1 = rand() % pool_->bitlen;
+    while ((index2 = rand() % pool_->bitlen) == index1);
+    backup = getbit(victim, index1);
+    setbit(victim, index1, getbit(victim, index2));
+    setbit(victim, index2, backup);
 }
 
+/*
+ Main function for running genetic algorithm. The genetic algorithm 
+ is forked off and runs in a different thread. The parent process
+ simply sends terminal commands to the genetic algorithm via signals.
+ 
+ @param g   Graph that the genetic algorithm finds bisection on. 
+ @return    Returns a 0 on successful execution. 
+ */
 int run_ge (wgraph_s *g)
 {
     int i;
@@ -494,6 +692,7 @@ int run_ge (wgraph_s *g)
     if (pid_ < 0)
         throw_exception();
     if (pid_) {
+        /* Parent Process: This only sends commands to genetic algorithm process */
         printf ("Now running Genetic Algorithm with chromosome size: %d\n> ", pool_->bitlen);
         memset (cbuf, 0, sizeof(cbuf));
         cbuf[CBUF_SIZE-1] = UEOF;
@@ -507,7 +706,6 @@ int run_ge (wgraph_s *g)
             }
             cbuf[index] = UEOF;
             write(pipe_[1], cbuf, CBUF_SIZE);
-            //race condition
             kill (pid_, SIGUSR1);
             pause();
         }
@@ -518,7 +716,12 @@ int run_ge (wgraph_s *g)
         if (signal(SIGINT, sigNOP) == SIG_ERR)
             throw_exception();
         n = pool_->chromsize;
-        pool_->start = clock();
+        time((time_t *)&pool_->start);
+        /* 
+         *
+         *   Main Genetic Algorithm Loop 
+         *
+         */
         while (1) {
             pool_->select (&parents);
             for (i = 0; i < NSELECT; i++) {
@@ -569,20 +772,18 @@ exception_:
     exit (EXIT_FAILURE);
 }
 
-void sima_rand (roulette_s *dst)
-{
-    uint32_t i;
-    
-    for (i = 0; i < pool_->solusize; i++) {
-        ((uint16_t *)&dst->ptr[i])[0] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[1] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[2] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[3] = (uint16_t)rand();
-    }
-    dst->ptr[i-1] &= pool_->cmask;
-    dst->fitness = getfitness(dst->ptr);
-}
-
+/*
+ Main function for running simulated annealing or foolish hill climbing. The 
+ simulated annealing/foolish hill climbing loop is forked off and runs in a 
+ separate process. The parent process simply sends terminal commands to the 
+ algorithm via signals.
+ 
+ @param g       Graph that the simulated annealing or foolish hill climbing
+                algorithm finds bisection on.
+ @param sa_hc   A "boolean" that determines whether this should run as simulated
+                annealing or foolish hill climbing. 
+ @return        Returns a 0 on successful execution.
+ */
 int run_simanneal (wgraph_s *g, int sa_hc)
 {
     float i;
@@ -609,6 +810,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
     if (pid_ < 0)
         throw_exception();
     if (pid_) {
+        /* Parent Process: This only sends commands to simulated annealing/foolish hill climbing process */
         index = 0;
         if (sa_hc == SIMULATED_ANNEALING)
             printf ("Now running Simulated Annealing with solution size: %d\n> ", pool_->bitlen);
@@ -636,7 +838,12 @@ int run_simanneal (wgraph_s *g, int sa_hc)
         if (signal(SIGINT, sigNOP) == SIG_ERR)
             throw_exception();
         ssize = pool_->solusize;
-        pool_->start = clock();
+        time((time_t *)&pool_->start);
+        /*
+         *
+         *   Main Simulated Annealing/Foolish Hill Climbing Loop. 
+         *
+         */
         while (1) {
             for (i = 0; i < pool_->iterations; i++) {
                 pool_->perturb (new_s->ptr);
@@ -649,15 +856,10 @@ int run_simanneal (wgraph_s *g, int sa_hc)
                             pool_->bestfeasible[j] = s->ptr[j];
                     }
                     s->fitness = new_s->fitness;
-                    /*printf("%f %f ",s->fitness, s->fitness);
-                     if (isfeasible(s->ptr))
-                     printf("feasible\n");
-                     else
-                     printf("not feasible\n");*/
                 }
             }
             pool_->T = pool_->alpha * pool_->T;
-            pool_->iterations = pool_->beta * pool_->T;
+            pool_->iterations = pool_->beta * pool_->iterations;
             pool_->gen++;
         }
     }
@@ -668,16 +870,59 @@ exception_:
     exit (EXIT_FAILURE);
 }
 
+/*
+ Randomly generates a solution for simulated annealing or 
+ foolish hill climbing and computes its fitness. 
+ 
+ @param dst     A pointer to the structure that will contain 
+                the randomly generated solution and its fitness. 
+ */
+void sima_rand (roulette_s *dst)
+{
+    uint32_t i;
+    
+    for (i = 0; i < pool_->solusize; i++) {
+        ((uint16_t *)&dst->ptr[i])[0] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[1] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[2] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[3] = (uint16_t)rand();
+    }
+    dst->ptr[i-1] &= pool_->cmask;
+    dst->fitness = getfitness(dst->ptr);
+}
+
+/*
+ The right side of the 'OR' statement in the simulated annealing algorithm: 
+    if( h(NewS) < h(S) or random < e ^ [ (h(S) - h(NewS)) / T ] )
+ This function is dynamically bound to pool_->e_pow. 
+ 
+ @return    Returns the result of the boolean statement for the simulated annealing. 
+ */
 int e_pow_sa (void)
 {
     return (SIMA_RAND() < pow (M_E, (pool_->rbuf[SIMA_curr].fitness - pool_->rbuf[SIMA_tmp].fitness) / pool_->T));
 }
 
+/*
+ This replaces the the right side of the 'OR' statement in simulated annealing 
+ with 'false', effectively removing it. This is for foolish hill climbing. 
+ 
+ @return    Always returns 0, or 'false'. 
+ */
 int nop_hc (void)
 {
     return 0;
 }
 
+/*
+ Signal handler for SIGUSR1 (for child process). This simply determines 
+ if simulated annealing/foolish hill climbing or the genetic algorithm
+ is running, and calls the appropriate comand parser for whichever is running. 
+ This signal is generated by the parent's command line, and sent to the child. 
+ This parses the command buffer containing data piped to it from the parent. 
+ 
+ @param signal  The integer value for the signal that invoked this handle.
+ */
 void cSIGUSR1 (int signal)
 {
     int tmpint;
@@ -700,6 +945,14 @@ void cSIGUSR1 (int signal)
     kill(getppid(), SIGUSR1);
 }
 
+/*
+ Signal handler for SIGINT (for parent process). This function is 
+ called when the user presses cntrl+c, and this sends the 'status'
+ command to the child process by generating SIGUSR1 and piping 
+ "status" to its command buffer. 
+ 
+ @param signal  The integer value for the signal that invoked this handle.
+ */
 void pSIGINT (int signal)
 {
     unsigned char cbuf[CBUF_SIZE];
@@ -710,6 +963,14 @@ void pSIGINT (int signal)
     kill (pid_, SIGUSR1);
     pause();
 }
+
+/* 
+ A NOP signal handler. This is used when SIGUSR1 is sent to parent
+ process to wake it up from a pause. 
+ */
+void sigNOP (int signal){}
+
+/***************** Functions To Print Output *****************/
 
 void printgestatus (void)
 {
@@ -724,11 +985,12 @@ void printgestatus (void)
         if (pool_->bestfeasible) {
             printf("\nMost Fit Feasible ( weight = %f ):\n", getfitness(pool_->bestfeasible));
             printchrom (pool_->bestfeasible);
+            printf("\n");
         }
         else
             printf("No Feasibles Found\n");
     }
-    printf("Elapsed Time: %llu\n", (uint64_t)(clock() - pool_->start));
+    printf("Elapsed Time: %llu\n", (uint64_t)(time(NULL) - pool_->start));
     
 }
 
@@ -749,7 +1011,7 @@ void printsastatus (void)
         else
             printf ("No 'Good' Feasibles Found.\n");
     }
-    printf("Elapsed Time: %llu\n", (uint64_t)(clock() - pool_->start));
+    printf("Elapsed Time: %llu\n", (uint64_t)(time(NULL) - pool_->start));
 }
 
 

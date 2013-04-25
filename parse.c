@@ -1,3 +1,15 @@
+/*
+ parse.c
+ Author: Jonathan Hamm
+ 
+ Description: 
+ 
+ This file only contains code for parsing. None of the actual 
+ genetic algorithm, simulated annealing, or foolish hill climbing
+ code is here. Howerver, this file does have code for building and 
+ defiing the data structures used by those algorithms. 
+ */
+
 #include "parse.h"
 #include "bis.h"
 #include <stdio.h>
@@ -17,11 +29,12 @@
 #define COM_ITER 2
 #define COM_ALPHA 3
 #define COM_BETA 4
+#define COM_PERTURB 5
 
-vhash_s vhash_;
-gtoken_s *stream_;
-pool_s *pool_;
-
+/* Global Variables */
+vhash_s vhash_;     //hash (declared extern in parse.h)
+gtoken_s *stream_;  //token stream
+pool_s *pool_;      //pool of chromosomes (declared extern in bis.h, and linked in bis.c)
 
 /* reads file into a buffer */
 static unsigned char *read_gfile(const char *fname);
@@ -639,8 +652,8 @@ void cgeparse (void)
                         printf("Mutate operator now set to: 2\n");
                     }
                     else {
-                        pool_->mutate = singlemove;
-                        printf("Mutate operator now set to: 3\n");
+                        pool_->mutate = pairwise_ex;
+                        printf("Mutate operator now set to: 3 (pairwise exchange perturbation function)\n");
                     }
                     break;
                 case COM_PROB:
@@ -694,7 +707,7 @@ void cgeparse (void)
                 else if (pool_->mutate == mutate2)
                     printf("Currently using mutation operator 2.\n");
                 else
-                    printf("Currently using mutation operator 3 (single move perturbation function).\n");
+                    printf("Currently using mutation operator 3 (pairwise exchange perturbation function).\n");
                 break;
             case COM_PROB:
                 printf("Current mutation probability is %u%%\n", pool_->mutateprob);
@@ -827,9 +840,7 @@ int p_feasible (void)
  show <show>
  
  <saparam>=>
- temp numreal | alpha numreal 
- | 
- iter numreal | beta numeral 
+ temp | alpha | iter | beta | perturb
  
  <show>=>
  best <feasible>
@@ -861,7 +872,6 @@ void csaparse (void)
         printsastatus();
     }
     else if (!strcmp(stream_->lexeme, "set")) {
-        GTNEXT();
         result = saparam();
         GTNEXT();
         if (stream_->type == T_NUM)
@@ -883,12 +893,25 @@ void csaparse (void)
             case COM_BETA:
                 pool_->beta = val;
                 break;
+            case COM_PERTURB:
+                if (val <=1) {
+                    pool_->perturb = mutate1;
+                    printf("Set Perturbation Function to mutate function 1.\n");
+                }
+                else if (val == 2) {
+                    pool_->perturb = mutate2;
+                    printf("Set Perturbation Function to mutate function 2.\n");
+                }
+                else {
+                    pool_->perturb = pairwise_ex;
+                    printf("Set Perturbation Function to mutate function 3 (pairwise exchange).\n");
+                }
+                break;
             default:
                 break;
         }
     }
     else if (!strcmp(stream_->lexeme, "get")) {
-        GTNEXT();
         result = saparam();
         switch (result) {
             case COM_T:
@@ -902,6 +925,14 @@ void csaparse (void)
                 break;
             case COM_BETA:
                 printf ("Beta currently set to: %f\n", pool_->beta);
+                break;
+            case COM_PERTURB:
+                if (pool_->perturb == mutate1)
+                    printf("Current Perturbation Function is: mutate function 1.\n");
+                else if (pool_->perturb == mutate1)
+                    printf("Current Perturbation Function is: mutate function 2.\n");
+                else 
+                    printf("Current Perturbation Function is: mutate function 3 (pairwise exchange).\n");
                 break;
             default:
                 break;
@@ -938,6 +969,8 @@ int saparam (void)
         return COM_ALPHA;
     if (!strcmp(stream_->lexeme, "beta"))
         return COM_BETA;
+    if (!strcmp(stream_->lexeme, "perturb"))
+        return COM_PERTURB;
     printf ("Expected 'temp', 'iter', 'alpha', or 'beta', but got %s\n", stream_->lexeme);
     return COM_ERR;
 }
