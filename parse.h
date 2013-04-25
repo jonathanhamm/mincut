@@ -1,14 +1,14 @@
 /*
  gparse.h
  Author: Jonathan Hamm
-  
+ 
  Description:
  
- This library is exclusively for routines that read and parse data so the genetic algorithm 
- can use it. This contains functions for file io, parsing graph data, and parsing command line 
- data. Command line data are commands sent to the GA during runtime from the terminal. These 
- are mostly for printing results and setting parameters while the algorithm is running. This 
- also contains functions for creating the graph data structure used by the GA. 
+ This library is exclusively for routines that read and parse data so the genetic algorithm
+ can use it. This contains functions for file io, parsing graph data, and parsing command line
+ data. Command line data are commands sent to the GA during runtime from the terminal. These
+ are mostly for printing results and setting parameters while the algorithm is running. This
+ also contains functions for creating the graph data structure used by the GA.
  */
 
 #ifndef _GPARSE_H_
@@ -34,7 +34,7 @@
 #define throw_exception() goto exception_
 
 #define IDCPY(DST,SRC)    *(uint64_t *)DST = *(uint64_t *)SRC; \
-                          *(((uint64_t *)DST) + 1) = *(((uint64_t *)SRC) + 1)
+*(((uint64_t *)DST) + 1) = *(((uint64_t *)SRC) + 1)
 
 #define GTNEXT() (stream_ = stream_->next)
 #define GTPREV() (stream_ = stream_->prev)
@@ -52,47 +52,47 @@ typedef struct vrec_s vrec_s;
 
 struct wgraph_s
 {
-  uint16_t  nedges;
-  uint16_t  nvert;
-  vertex_s  **vtable;
+    uint16_t  nedges;
+    uint16_t  nvert;
+    vertex_s  **vtable;
 };
 
 
 struct gtoken_s
 {
-  unsigned short type;
-  unsigned char lexeme[MAXLEXLEN + 1];
-  gtoken_s *prev;
-  gtoken_s *next;
+    unsigned short type;
+    unsigned char lexeme[MAXLEXLEN + 1];
+    gtoken_s *prev;
+    gtoken_s *next;
 };
 
 struct vertex_s
 {
-  unsigned char name[MAXLEXLEN + 1];
-  uint16_t nedges;
-  edge_s **edges;
+    unsigned char name[MAXLEXLEN + 1];
+    uint16_t nedges;
+    edge_s **edges;
 };
 
 struct edge_s
 {
-  float weight;
-  vertex_s *v1;
-  vertex_s *v2;
+    float weight;
+    vertex_s *v1;
+    vertex_s *v2;
 };
 
 struct vrec_s
 {
-  vertex_s *v;
-  uint16_t index;
-  union {
-    unsigned long isoccupied;
-    vrec_s *next;
-  };
+    vertex_s *v;
+    uint16_t index;
+    union {
+        unsigned long isoccupied;
+        vrec_s *next;
+    };
 };
 
 struct vhash_s
 {
-  vrec_s table[VHTABLESIZE];
+    vrec_s table[VHTABLESIZE];
 };
 
 extern vhash_s vhash_;

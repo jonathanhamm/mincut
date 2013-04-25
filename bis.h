@@ -26,15 +26,15 @@
 #define PSIZE_ROUL_DIV 5
 
 #if POOLSIZE / PSIZE_ROUL_DIV == 0
-  #define NSELECT 1
+#define NSELECT 1
 #else
-  #define NSELECT (POOLSIZE / PSIZE_ROUL_DIV)
+#define NSELECT (POOLSIZE / PSIZE_ROUL_DIV)
 #endif
 
 #define GET_CHRBYSIZE(pool) ((pool->chromsize / 8) + \
-                                  (pool->chromsize % 8 != 0))
+(pool->chromsize % 8 != 0))
 #define GET_CHBITLEN(pool) (pool->bitlen)
-#define CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0)) 
+#define CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0))
 
 typedef struct pool_s pool_s;
 
@@ -46,50 +46,50 @@ typedef struct ppair_s ppair_s;
 
 struct roulette_s
 {
-  double prob;
-  double fitness;
-  uint32_t cummulative;
-  uint64_t *ptr;
+    double prob;
+    double fitness;
+    uint32_t cummulative;
+    uint64_t *ptr;
 };
 
 struct ppair_s
 {
-  roulette_s *p1;
-  roulette_s *p2;
+    roulette_s *p1;
+    roulette_s *p2;
 };
 
 struct selected_s
 {
-  ppair_s couples[NSELECT];
+    ppair_s couples[NSELECT];
 };
 
 struct pool_s
 {
-  uint64_t gen;       /*generation number*/
-  uint16_t chromsize; /*size in quad words*/
-  uint16_t bitlen;    /*size in bits*/
-  uint64_t cmask;     /*bit mask for each chromosome*/
-  uint8_t remain;     /*Remainder bits that carry over in new quad word*/
-  uint8_t mutateprob;
-  wgraph_s *graph;
-  uint64_t start;
-  void (*select) (selected_s *);
-  void (*cross) (uint64_t *, uint64_t *, uint64_t *, uint64_t *);
-  void (*mutate) (uint64_t *);
-  int  (*e_pow) (void); /* The power calculation used in simluated annealing which is absent from hill climbing*/
-  double fitsum;
-  uint16_t ranksum;
-  uint32_t accum;
-  uint8_t k;
-  uint64_t *bestfeasible;
-  roulette_s rbuf[POOLSIZE];
-  /* Simulated Annealing and Hill Climbing */
-  float iterations, T, alpha, beta;
+    uint64_t gen;       /*generation number*/
+    uint16_t chromsize; /*size in quad words*/
+    uint16_t bitlen;    /*size in bits*/
+    uint64_t cmask;     /*bit mask for each chromosome*/
+    uint8_t remain;     /*Remainder bits that carry over in new quad word*/
+    uint8_t mutateprob;
+    wgraph_s *graph;
+    uint64_t start;
+    void (*select) (selected_s *);
+    void (*cross) (uint64_t *, uint64_t *, uint64_t *, uint64_t *);
+    void (*mutate) (uint64_t *);
+    int  (*e_pow) (void); /* The power calculation used in simluated annealing which is absent from hill climbing*/
+    double fitsum;
+    uint16_t ranksum;
+    uint32_t accum;
+    uint8_t k;
+    uint64_t *bestfeasible;
+    roulette_s rbuf[POOLSIZE];
+    /* Simulated Annealing and Hill Climbing */
+    float iterations, T, alpha, beta;
 #define is_not_ge e_pow
 #define perturb mutate
 #define solusize chromsize
 #define solution popul
-  uint64_t popul[0];
+    uint64_t popul[0];
 };
 
 extern pool_s *pool_;
