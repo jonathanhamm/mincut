@@ -16,7 +16,7 @@
 #define COM_T 1
 #define COM_ITER 2
 #define COM_ALPHA 3
-#define COM_BETA 4
+#define COM_BETA 4 
 
 vhash_s vhash_;
 gtoken_s *stream_;
@@ -839,7 +839,7 @@ int sashow (void)
 {
     if (!strcmp(stream_->lexeme, "best")) {
         GTNEXT();
-        return 1+p_feasible();
+        return 1 + p_feasible();
     }
     else if (stream_->type != T_EOF) {
         printf ("Expected 'best' or nothing, but got '%s'.\n", stream_->lexeme);

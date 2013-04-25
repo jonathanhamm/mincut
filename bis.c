@@ -632,7 +632,6 @@ void cSIGUSR1 (int signal)
     unsigned char cbuf[CBUF_SIZE];
     gtoken_s *head;
     
-    printf("called signal\n");
     read(pipe_[0], cbuf, CBUF_SIZE);
     head = lex (cbuf);
     if (!head)
@@ -751,10 +750,10 @@ void sima_rand (roulette_s *dst)
     uint32_t i;
     
     for (i = 0; i < pool_->solusize; i++) {
-        ((uint16_t *)dst->ptr)[0] = (uint16_t)rand();
-        ((uint16_t *)dst->ptr)[1] = (uint16_t)rand();
-        ((uint16_t *)dst->ptr)[2] = (uint16_t)rand();
-        ((uint16_t *)dst->ptr)[3] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[0] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[1] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[2] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[3] = (uint16_t)rand();
     }
     dst->ptr[i-1] &= pool_->cmask;
     dst->fitness = getfitness(dst->ptr);
@@ -764,7 +763,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
 {
     float i;
     int j;
-    uint16_t index;
+    uint16_t index, ssize;
     unsigned char cbuf[CBUF_SIZE];
     roulette_s *s, *new_s;
     
@@ -811,16 +810,17 @@ int run_simanneal (wgraph_s *g, int sa_hc)
         if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
             throw_exception();
         if (signal(SIGINT, sigNOP) == SIG_ERR)
-            throw_exception(); 
+            throw_exception();
+        ssize = pool_->solusize;
         while (1) {
             for (i = 0; i < pool_->iterations; i++) {
                 pool_->perturb (new_s->ptr);
                 new_s->fitness = getfitness(new_s->ptr);
                 if (new_s->fitness < s->fitness || pool_->e_pow()) {
-                    for (j = 0; j < pool_->solusize; j++)
+                    for (j = 0; j < ssize; j++)
                         s->ptr[j] = new_s->ptr[j];
                     if (isfeasible(s->ptr)) {
-                        for (j = 0; j < pool_->solusize; j++)
+                        for (j = 0; j < ssize; j++)
                             pool_->bestfeasible[j] = s->ptr[j];
                     }
                     s->fitness = new_s->fitness;
