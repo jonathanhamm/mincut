@@ -825,5 +825,13 @@ int saparam (void)
 
 int sashow (void)
 {
-    
+    if (!strcmp(stream_->lexeme, "best")) {
+        GTNEXT();
+        return p_feasible();
+    }
+    else if (stream_->type != T_EOF) {
+        printf ("Expected 'best' or nothing, but got '%s'.\n", stream_->lexeme);
+        return -1;
+    }
+    return 0;
 }
