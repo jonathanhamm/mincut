@@ -117,7 +117,7 @@ extern void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *ds
 extern void mutate1 (uint64_t *victim);
 extern void mutate2 (uint64_t *victim);
 
-extern void printsolution (int index);
+extern void printsolution (int index, uint64_t *ptr);
 extern void printgestatus (void);
 extern void printsastatus (void);
 

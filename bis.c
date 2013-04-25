@@ -708,7 +708,7 @@ void print_solset (solset_s *solset)
     printf("\n}\n");
 }
 
-void printsolution (int index)
+void printsolution (int index, uint64_t *ptr)
 {
     int       i;
     float     fitness;
@@ -716,7 +716,10 @@ void printsolution (int index)
     int       v1size, v2size;
     solset_s  *v1,    *v2;
     
-    chrom = pool_->rbuf[index].ptr;
+    if (ptr)
+        chrom = ptr;
+    else
+        chrom = pool_->rbuf[index].ptr;
     fitness = getfitness(chrom);
     if (isfeasible(chrom))
         printf ("Showing Feasible Chromosome %d with fitness %f:\n", index, fitness);

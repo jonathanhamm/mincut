@@ -674,17 +674,17 @@ void p_show (void)
         if (index <= 0 || index > POOLSIZE)
             printf ("Value %d out of range. Range is 1 to %d.\n", index, POOLSIZE);
         else
-            printsolution(--index);
+            printsolution(--index, NULL);
     }
     else if (!strcmp (stream_->lexeme, "best")) {
         GTNEXT();
         result = p_feasible ();
         if (!result)
-            printsolution (POOLSIZE-1);
+            printsolution (POOLSIZE-1, NULL);
         else if (result == 1) {
             for (index = POOLSIZE-1; index >= 0
                  && pool_->rbuf[index].ptr != pool_->bestfeasible; index--);
-            printsolution (index);
+            printsolution (index, NULL);
         }
     }
     else
@@ -803,6 +803,18 @@ void csaparse (void)
     else if (!strcmp (stream_->lexeme, "show")) {
         GTNEXT();
         result = sashow();
+        switch (result) {
+            case 0:
+                printsolution (SIMA_curr, NULL);
+                break;
+            case 1:
+                printsolution (SIMA_curr, NULL);
+                break;
+            case 2:
+                printsolution (-1, pool_->bestfeasible);
+            default:
+                break;
+        }
     }
     else
         printf ("Command Line Error: Unrecognized: '%s'\n", stream_->lexeme);
@@ -827,7 +839,7 @@ int sashow (void)
 {
     if (!strcmp(stream_->lexeme, "best")) {
         GTNEXT();
-        return p_feasible();
+        return 1+p_feasible();
     }
     else if (stream_->type != T_EOF) {
         printf ("Expected 'best' or nothing, but got '%s'.\n", stream_->lexeme);
