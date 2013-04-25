@@ -527,6 +527,8 @@ int run_ge (wgraph_s *g)
   if (pipe (pipe_) == -1)
     throw_exception();
   pid_ = fork();
+  if (pid_ < 0)
+    throw_exception();
   if (pid_) {
     printf ("Now running Genetic Algorithm with chromosome size: %d\n> ", pool_->bitlen);
     memset (cbuf, 0, sizeof(cbuf));
