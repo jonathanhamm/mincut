@@ -16,7 +16,7 @@
 #define COM_T 1
 #define COM_ITER 2
 #define COM_ALPHA 3
-#define COM_BETA 4 
+#define COM_BETA 4
 
 vhash_s vhash_;
 gtoken_s *stream_;
@@ -25,9 +25,8 @@ pool_s *pool_;
 
 /* reads file into a buffer */
 static unsigned char *read_gfile(const char *fname);
-static void tablegen (void);
 
-/* tokenizing routines for graph data */
+/* Token "constructor" */
 static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type);
 
 /* graph parsing routines */
@@ -41,7 +40,6 @@ static void e_ (wgraph_s *g);
 
 /* graph data structure routines */
 static vertex_s *v_lookup (wgraph_s *graph, unsigned char *key);
-static void printbyte (uint8_t b);
 
 /* Genetic Algorithm Commandline Parsing Routines */
 static int  p_op (void);
@@ -53,7 +51,14 @@ static int p_feasible (void);
 static int saparam (void);
 static int sashow (void);
 
-
+/*
+ Main function to invoke for parsing a graph file
+ into a graph structure that the program can 
+ reference. 
+ 
+ @param file    Name of file containing graph data. 
+ @return        Returns a graph data structure.
+ */ 
 wgraph_s *gparse (const unsigned char *file)
 {
     wgraph_s *g;
@@ -70,6 +75,12 @@ wgraph_s *gparse (const unsigned char *file)
     return g;
 }
 
+/* 
+ Read a file into a char buffer. 
+ 
+ @param fname   Name of file to read. 
+ @return        Returns a pointer to the buffer holding the file data.
+ */
 unsigned char *read_gfile (const char *fname)
 {
     FILE *f;
@@ -102,6 +113,19 @@ exception_:
     exit(EXIT_FAILURE);
 }
 
+/*
+ Inserts an index into a hash table. The index 
+ corresponds to the index of a vertex in the 
+ graph structure. The index is hashed on its 
+ vertex's structure pointer for lookup. The 
+ pointer/hash key is located when looking
+ through the first set's edges. 
+ 
+ @param v       The vertex structur pointer which is the
+                hash key. 
+ @param index   The index of the vertex. 
+ @return        Returns 1 on success. 
+ */
 int vhashinsert (vertex_s *v, uint16_t index)
 {
     uint16_t i;
@@ -133,6 +157,15 @@ int vhashinsert (vertex_s *v, uint16_t index)
     return 1;
 }
 
+/* 
+ Looks at hash table to find the index of a 
+ vertex in the graph structure. 
+ 
+ @param v   Pointer to vertex structure that 
+            is the lookup key.
+ @return    Returns the index of the vertex in
+            the graph structure. 
+ */
 uint16_t vgetindex (vertex_s *v)
 {
     uint16_t i;
@@ -150,10 +183,20 @@ uint16_t vgetindex (vertex_s *v)
 }
 
 /*
- *  Regex for node/edge definition lexemes:
- *  n: (a...Z)+(a...z+0...9)*
- *  real: (0...9)+<optional_fract>
- *  <optional_fract>: (dot 0...9)?
+ Small lexical analyzer used for tokenizing 
+ a buffer of a data. This is used for tokenizing
+ graph data from the input file and tokenizing
+ commands entered by the user at runtime. 
+ 
+ Lexer tokenizes based on the following regex: 
+ n: (a...Z)+(a...z+0...9)*
+ real: (0...9)+<optional_fract>
+ <optional_fract>: (dot 0...9)?
+ 
+ @param buf Pointer to the buffer that is tokenized. 
+ @return    Returns a pointer to a linked list of 
+            tokens on success, and NULL on if there 
+            is a lexical error.
  */
 gtoken_s *lex (unsigned char *buf)
 {
@@ -230,6 +273,11 @@ exception_:
     return NULL;
 }
 
+/*
+ Frees tokens (created by lex) from memory. 
+ 
+ @param list    List of tokens to free. 
+ */
 void freetokens (gtoken_s *list)
 {
     gtoken_s *backup;
@@ -241,7 +289,17 @@ void freetokens (gtoken_s *list)
     }
 }
 
-/*  Graph Parsing Routines */
+/*
+ "Constructs" a token and adds it to the list of nodes used
+ by a parser.
+ 
+ @param node    The tail of the list of tokens the new token
+                will be appended to.
+ @param lexeme  Pointer to the lexeme that the new token will 
+                contain.
+ @param type    The type of the token.
+ @return        Returns a pointer to the new token "constructed".
+ */
 gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
 {
     gtoken_s *tok;
@@ -262,14 +320,20 @@ gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
     return tok;
 }
 
-
-/*  Graph Parsing Grammar:
- *  <graph> => <nodelist> <edgelist> EOF
- *  <nodelist> => V={v <nodeparam>}
- *  <nodeparam> => ,v <nodeparam> | epsilon
- *  <edgelist> => E={<e> <edgeparam> }
- *  <edgeparam> => ,<e> <edgeparam> | epsilon
- *  <e> => {n,n,real}
+/*
+ Parser for graph data. Parser adheres to
+ the following grammar:
+ 
+ Graph Parsing Grammar:
+ <graph> => <nodelist> <edgelist> EOF
+ <nodelist> => V={v <nodeparam>}
+ <nodeparam> => ,v <nodeparam> | epsilon
+ <edgelist> => E={<e> <edgeparam> }
+ <edgeparam> => ,<e> <edgeparam> | epsilon
+ <e> => {n,n,real}
+ 
+ @return    Returns a pointer to the graph
+            data structure built by the parser.
  */
 wgraph_s *parse_ (void)
 {
@@ -354,39 +418,48 @@ void e_ (wgraph_s *g)
     *v2;
     
     if (GTNEXT()->type == T_OPENBRACE)
+    if (GTNEXT()->type == T_ID) {
+        v1 = v_lookup (g, stream_->lexeme);
+        if (!v1)
+            throw_exception();
+        if (GTNEXT()->type == T_COMMA)
         if (GTNEXT()->type == T_ID) {
-            v1 = v_lookup (g, stream_->lexeme);
-            if (!v1)
+            v2 = v_lookup (g, stream_->lexeme);
+            if (!v2)
                 throw_exception();
             if (GTNEXT()->type == T_COMMA)
-                if (GTNEXT()->type == T_ID) {
-                    v2 = v_lookup (g, stream_->lexeme);
-                    if (!v2)
-                        throw_exception();
-                    if (GTNEXT()->type == T_COMMA)
-                        if (GTNEXT()->type == T_NUM) {
-                            weight = atof(stream_->lexeme);
-                            if (GTNEXT()->type == T_CLOSEBRACE) {
-                                g->nedges++;
-                                edge_s_ (v1, v2, weight);
-                                return;
-                            }
-                        }
+            if (GTNEXT()->type == T_NUM) {
+                weight = atof(stream_->lexeme);
+                if (GTNEXT()->type == T_CLOSEBRACE) {
+                    g->nedges++;
+                    edge_s_ (v1, v2, weight);
+                    return;
                 }
+            }
         }
+    }
     
 exception_:
     printf ("Syntax Error: %s\n", stream_->lexeme);
     exit(EXIT_FAILURE);
 }
 
-/*graph data structure routines*/
-
+/*
+ "Constructor" for graph structure. 
+ 
+ @return    Returns a zeroed block of memory. 
+ */
 inline wgraph_s *wgraph_s_ (void)
 {
     return calloc(1,sizeof(wgraph_s));
 }
-
+/*
+ Vertex "constructor". Constructs a vertex for 
+ the graph using a token. 
+ 
+ @param tok Pointer to the token used for the vertex. 
+ @return    Returns a pointer to the vertex structure.
+ */
 vertex_s *vertex_s_ (gtoken_s *tok)
 {
     vertex_s *v;
@@ -400,6 +473,13 @@ vertex_s *vertex_s_ (gtoken_s *tok)
     return v;
 }
 
+/*
+ Adds an edge to a Vertex. 
+ 
+ @param v   Vertex to attach edge to. 
+ @param e   Edge to attach to vertex. 
+ @return    Returns 1 on success
+ */
 int addedge (vertex_s *v, edge_s *e)
 {
     if (v->nedges)
@@ -415,6 +495,14 @@ int addedge (vertex_s *v, edge_s *e)
     return 1;
 }
 
+/*
+ Edge "constructor". Constructs an edge from 2 vertices with 
+ a given weight. 
+ 
+ @param v1      First vertex this edge connects. 
+ @param v2      Second vertex this edge connects.
+ @param weight  Weight of the edge.
+ */
 edge_s *edge_s_ (vertex_s *v1, vertex_s *v2, double weight)
 {
     edge_s *edge;
@@ -434,6 +522,15 @@ exception_:
     exit(EXIT_FAILURE);
 }
 
+/*
+ Inserts a vertex into the graph data strucure. 
+ 
+ @param graph   The graph structure to insert the 
+                vertex into.
+ @param v       The vertex being inserted into the  
+                graph.
+ @return        Returns 1 on success.
+ */
 int insert_vertex (wgraph_s *graph, vertex_s *v)
 {
     static uint16_t cvtablesize;
@@ -463,6 +560,15 @@ exception_:
     exit(EXIT_FAILURE);
 }
 
+/*
+ Searches for a vertex in the vertex table of the graph. 
+ The search key is the vertex's lexeme. 
+ 
+ @param graph   Graph to search. 
+ @param key     The search key, which is the vertex's lexeme. 
+ @return        Returns a pointer to the vertex if found, 
+                otherwise returns NULL if not found.
+ */
 vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
 {
     uint16_t i;
@@ -475,18 +581,11 @@ vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
     return NULL;
 }
 
-void printbyte (uint8_t b)
-{
-    uint8_t i;
-    
-    for (i = 0; i < 8; i++)
-        printf("%d",((b << i) & 0x80)>>7);
-    printf("\n");
-}
-
 /*
- Genetic Algorithm Commandline Grammar
- 
+ Parser for the genetic algorithm's commands 
+ entered at runtime. Parser adheres to the 
+ following grammar:
+
  <cparse>=>
  status | exit | quit | q | Q
  |
@@ -535,9 +634,13 @@ void cgeparse (void)
                         pool_->mutate = mutate1;
                         printf("Mutate operator now set to: 1\n");
                     }
-                    else {
+                    else if (val == 2){
                         pool_->mutate = mutate2;
                         printf("Mutate operator now set to: 2\n");
+                    }
+                    else {
+                        pool_->mutate = singlemove;
+                        printf("Mutate operator now set to: 3\n");
                     }
                     break;
                 case COM_PROB:
@@ -588,8 +691,10 @@ void cgeparse (void)
             case COM_OP:
                 if (pool_->mutate == mutate1)
                     printf("Currently using mutation operator 1.\n");
-                else
+                else if (pool_->mutate == mutate2)
                     printf("Currently using mutation operator 2.\n");
+                else
+                    printf("Currently using mutation operator 3 (single move perturbation function).\n");
                 break;
             case COM_PROB:
                 printf("Current mutation probability is %u%%\n", pool_->mutateprob);
@@ -708,7 +813,9 @@ int p_feasible (void)
 
 
 /*
- Simulate Annealing/"Foolish Hill Climbing Commandline Grammar
+ Parser for commands entered at runtime for simulated
+ annealing and foolish hill climbing. The parser adheres
+ to the following grammar:
  
  <cparse>=>
  status | exit | quit | q | Q

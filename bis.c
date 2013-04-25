@@ -36,37 +36,44 @@ static pid_t pid_;
 static int pipe_[2];
 pool_s *pool_;
 
+/* Constructors for Genetic Algorithm Pool and Simulated Annealing & Hill Climbing "Pool" */
+static void pool_s_ (wgraph_s *g);
+static void pool_s_simanneal (wgraph_s *g, int sa_hc);
+
+/* Bit Operations */
+static uint8_t getbit (uint64_t *chrom, uint16_t pos);
+static void setbit (uint64_t *chrom, uint16_t pos, uint8_t val);
+
+/* Fitness Evaluation Functions */
+static int countdigits(uint64_t *cptr);
+static int iscut(uint64_t *chrom, vertex_s *v);
+static double sumweights (uint64_t *chrom);
+static double getfitness (uint64_t *chrom);
+static int prcmp (roulette_s *a, roulette_s *b);
+static void computeprob (void);
+static int isfeasible (uint64_t *chrom);
+
+/* Iterative Binary Search */
+static int bsearch_r (roulette_s *roul, uint32_t key);
+
+/* Simulated Annealing and Foolish Hill Climbing Functions */
+static int e_pow_sa (void);
+static int nop_hc (void);
+
 /* Signal Handlers */
 static void sigNOP (int signal) {}
 static void cSIGUSR1 (int signal);
 static void pSIGINT (int signal);
-static void pSIGFPE (int signal);
-static void cSIGUSR1_sa (int signal);
 
-static void pool_s_ (wgraph_s *g);
+/* Printing Functions */
 static void printqword (uint64_t lword, uint8_t mask);
-static double sumweights (uint64_t *chrom);
-static double getfitness (uint64_t *chrom);
-static void computeprob (void);
-static int isfeasible (uint64_t *chrom);
 static void printchrom (uint64_t *chrom);
-
-static int e_pow_sa (void);
-static int nop_hc (void);
-
-int prcmp (roulette_s *a, roulette_s *b)
-{
-    if (a->prob < b->prob)
-        return -1;
-    if (a->prob > b->prob)
-        return 1;
-    return 0;
-}
+static void insert_solset (solset_s **sset, vertex_s *v);
+static void print_solset (solset_s *solset);
 
 /*
  "Constructor" for pool_s structure. This simply initializes a pool
  of chromosomes for the genetic algorithm.
- 
  */
 void pool_s_ (wgraph_s *g)
 {
@@ -158,43 +165,16 @@ void pool_s_simanneal (wgraph_s *g, int sa_hc)
     }
 }
 
-void printqword (uint64_t lword, uint8_t end)
+uint8_t getbit (uint64_t *chrom, uint16_t pos)
 {
-    uint8_t i;
-    
-    if (!end)
-        end = 64;
-    for (i = 0; i < end; i++)
-        printf("%llu",(lword >> i) & 1);
+    return (chrom[pos / 64] >> (pos % 64)) & 1llu;
 }
 
-void printchrom (uint64_t *chrom)
+void setbit (uint64_t *chrom, uint16_t pos, uint8_t val)
 {
-    uint16_t i, n;
-    
-    n = pool_->chromsize;
-    for (i = 0; i < n; i++) {
-        if (i == n-1)
-            printqword (chrom[i], pool_->remain);
-        else
-            printqword (chrom[i], 64);
-    }
-}
-
-void printpool (void)
-{
-    uint16_t i, n;
-    uint64_t *ptr;
-    
-    n = pool_->chromsize;
-    ptr = pool_->popul;
-    for (i = 0; i < POOLSIZE; i++) {
-        printf("%d:\t", i);
-        printchrom (ptr);
-        printf("  %f, %d, %d", getfitness (ptr), ((uint8_t *)ptr)[7] >> (8 - pool_->bitlen), isfeasible (ptr));
-        printf("\n");
-        ptr += n;
-    }
+    chrom[pos / 64] &= ~(1llu << (pos % 64));
+    if (val)
+        chrom[pos / 64] |= (1llu << (pos % 64));
 }
 
 int countdigits (uint64_t *cptr)
@@ -256,19 +236,6 @@ double sumweights (uint64_t *chrom)
     return weight;
 }
 
-void printweights (void)
-{
-    uint64_t *ptr;
-    uint16_t n, i;
-    
-    n = pool_->chromsize;
-    ptr = pool_->popul;
-    for (i = 0; i < POOLSIZE; i++) {
-        printf("Weight: %f, %d, %d\n",sumweights (ptr), n, isfeasible(ptr));
-        ptr += n;
-    }
-}
-
 double getfitness (uint64_t *chrom)
 {
     int setcount, differ;
@@ -276,6 +243,15 @@ double getfitness (uint64_t *chrom)
     setcount = countdigits (chrom);
     differ = abs(2*setcount - pool_->bitlen);
     return sumweights (chrom) + (differ << 4);
+}
+
+int prcmp (roulette_s *a, roulette_s *b)
+{
+    if (a->prob < b->prob)
+        return -1;
+    if (a->prob > b->prob)
+        return 1;
+    return 0;
 }
 
 void computeprob (void)
@@ -301,18 +277,6 @@ int isfeasible (uint64_t *chrom)
         (2 * countdigits (chrom) == pool_->bitlen + 1);
     else
         return  (2 * countdigits (chrom) == pool_->bitlen);
-}
-
-uint8_t getbit (uint64_t *chrom, uint16_t pos)
-{
-    return (chrom[pos / 64] >> (pos % 64)) & 1llu;
-}
-
-void setbit (uint64_t *chrom, uint16_t pos, uint8_t val)
-{
-    chrom[pos / 64] &= ~(1llu << (pos % 64));
-    if (val)
-        chrom[pos / 64] |= (1llu << (pos % 64));
 }
 
 void roulette_sf (selected_s *parents)
@@ -605,25 +569,113 @@ exception_:
     exit (EXIT_FAILURE);
 }
 
-void printgestatus (void)
+void sima_rand (roulette_s *dst)
 {
-    printf("Status at Generation: %llu\n", pool_->gen);
-    printpool();
-    printf("\nMost Fit ( weight = %f ):\n", pool_->rbuf[POOLSIZE-1].fitness);
-    printchrom (pool_->rbuf[POOLSIZE-1].ptr);
-    if (isfeasible(pool_->rbuf[POOLSIZE-1].ptr))
-        printf("\nIs Feasible\n");
-    else {
-        printf("\nNot Feasible\n");
-        if (pool_->bestfeasible) {
-            printf("\nMost Fit Feasible ( weight = %f ):\n", getfitness(pool_->bestfeasible));
-            printchrom (pool_->bestfeasible);
-        }
-        else
-            printf("No Feasibles Found\n");
-    }
-    printf("Elapsed Time: %llu\n", (uint64_t)(clock() - pool_->start));
+    uint32_t i;
     
+    for (i = 0; i < pool_->solusize; i++) {
+        ((uint16_t *)&dst->ptr[i])[0] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[1] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[2] = (uint16_t)rand();
+        ((uint16_t *)&dst->ptr[i])[3] = (uint16_t)rand();
+    }
+    dst->ptr[i-1] &= pool_->cmask;
+    dst->fitness = getfitness(dst->ptr);
+}
+
+int run_simanneal (wgraph_s *g, int sa_hc)
+{
+    float i;
+    int j;
+    uint16_t index, ssize;
+    unsigned char cbuf[CBUF_SIZE];
+    roulette_s *s, *new_s;
+    
+    pool_s_simanneal (g, sa_hc);
+    s = &pool_->rbuf[SIMA_curr];
+    new_s = &pool_->rbuf[SIMA_tmp];
+    s->ptr = pool_->solution;
+    new_s->ptr = &pool_->solution[pool_->solusize];
+    sima_rand(s);
+    for (j = 0; j < pool_->solusize; j++)
+        pool_->bestfeasible[j] = s->ptr[j];
+    if (signal(SIGINT, pSIGINT) == SIG_ERR)
+        throw_exception();
+    if (signal(SIGUSR1, sigNOP) == SIG_ERR)
+        throw_exception();
+    if (pipe (pipe_) == -1)
+        throw_exception();
+    pid_ = fork();
+    if (pid_ < 0)
+        throw_exception();
+    if (pid_) {
+        index = 0;
+        if (sa_hc == SIMULATED_ANNEALING)
+            printf ("Now running Simulated Annealing with solution size: %d\n> ", pool_->bitlen);
+        else
+            printf ("Now running \"Foolish\" Hill Climbing with solution size: %d\n> ", pool_->bitlen);
+        memset (cbuf, 0, sizeof(cbuf));
+        cbuf[CBUF_SIZE-1] = UEOF;
+        while (1) {
+            index = 0;
+            while ((cbuf[index] = (char)getchar()) != '\n') {
+                if (index < CBUF_SIZE-1)
+                    ++index;
+                else
+                    printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
+            }
+            cbuf[index] = UEOF;
+            write(pipe_[1], cbuf, CBUF_SIZE);
+            kill (pid_, SIGUSR1);
+            pause();
+        }
+    }
+    else {
+        if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
+            throw_exception();
+        if (signal(SIGINT, sigNOP) == SIG_ERR)
+            throw_exception();
+        ssize = pool_->solusize;
+        pool_->start = clock();
+        while (1) {
+            for (i = 0; i < pool_->iterations; i++) {
+                pool_->perturb (new_s->ptr);
+                new_s->fitness = getfitness(new_s->ptr);
+                if (new_s->fitness < s->fitness || pool_->e_pow()) {
+                    for (j = 0; j < ssize; j++)
+                        s->ptr[j] = new_s->ptr[j];
+                    if (isfeasible(s->ptr)) {
+                        for (j = 0; j < ssize; j++)
+                            pool_->bestfeasible[j] = s->ptr[j];
+                    }
+                    s->fitness = new_s->fitness;
+                    /*printf("%f %f ",s->fitness, s->fitness);
+                     if (isfeasible(s->ptr))
+                     printf("feasible\n");
+                     else
+                     printf("not feasible\n");*/
+                }
+            }
+            pool_->T = pool_->alpha * pool_->T;
+            pool_->iterations = pool_->beta * pool_->T;
+            pool_->gen++;
+        }
+    }
+    return 0;
+    
+exception_:
+    perror("Program Failed Initialization");
+    exit (EXIT_FAILURE);
+}
+
+int e_pow_sa (void)
+{
+    return (SIMA_RAND() < pow (M_E, (pool_->rbuf[SIMA_curr].fitness - pool_->rbuf[SIMA_tmp].fitness) / pool_->T));
+}
+
+int nop_hc (void)
+{
+    return 0;
 }
 
 void cSIGUSR1 (int signal)
@@ -659,9 +711,85 @@ void pSIGINT (int signal)
     pause();
 }
 
-void pSIGFPE (int signal)
+void printgestatus (void)
 {
-    kill (getppid(), SIGSEGV);
+    printf("Status at Generation: %llu\n", pool_->gen);
+    printpool();
+    printf("\nMost Fit ( weight = %f ):\n", pool_->rbuf[POOLSIZE-1].fitness);
+    printchrom (pool_->rbuf[POOLSIZE-1].ptr);
+    if (isfeasible(pool_->rbuf[POOLSIZE-1].ptr))
+        printf("\nIs Feasible\n");
+    else {
+        printf("\nNot Feasible\n");
+        if (pool_->bestfeasible) {
+            printf("\nMost Fit Feasible ( weight = %f ):\n", getfitness(pool_->bestfeasible));
+            printchrom (pool_->bestfeasible);
+        }
+        else
+            printf("No Feasibles Found\n");
+    }
+    printf("Elapsed Time: %llu\n", (uint64_t)(clock() - pool_->start));
+    
+}
+
+void printsastatus (void)
+{
+    printf("Status at \"Generation\": %llu\n", pool_->gen);
+    printchrom(pool_->rbuf[SIMA_curr].ptr);
+    printf("\tFitness: %f\n", getfitness(pool_->rbuf[SIMA_curr].ptr));
+    if (isfeasible(pool_->rbuf[SIMA_curr].ptr))
+        printf ("Is Feasible\n");
+    else {
+        printf ("Is not Feasible\n");
+        if (isfeasible(pool_->bestfeasible)) {
+            printf("Best Feasible is: \n");
+            printchrom(pool_->bestfeasible);
+            printf("\tFitness: %f\n", getfitness(pool_->bestfeasible));
+        }
+        else
+            printf ("No 'Good' Feasibles Found.\n");
+    }
+    printf("Elapsed Time: %llu\n", (uint64_t)(clock() - pool_->start));
+}
+
+
+void printqword (uint64_t lword, uint8_t end)
+{
+    uint8_t i;
+    
+    if (!end)
+        end = 64;
+    for (i = 0; i < end; i++)
+        printf("%llu",(lword >> i) & 1);
+}
+
+void printchrom (uint64_t *chrom)
+{
+    uint16_t i, n;
+    
+    n = pool_->chromsize;
+    for (i = 0; i < n; i++) {
+        if (i == n-1)
+            printqword (chrom[i], pool_->remain);
+        else
+            printqword (chrom[i], 64);
+    }
+}
+
+void printpool (void)
+{
+    uint16_t i, n;
+    uint64_t *ptr;
+    
+    n = pool_->chromsize;
+    ptr = pool_->popul;
+    for (i = 0; i < POOLSIZE; i++) {
+        printf("%d:\t", i);
+        printchrom (ptr);
+        printf("  %f, %d, %d", getfitness (ptr), ((uint8_t *)ptr)[7] >> (8 - pool_->bitlen), isfeasible (ptr));
+        printf("\n");
+        ptr += n;
+    }
 }
 
 void insert_solset (solset_s **sset, vertex_s *v)
@@ -742,132 +870,4 @@ void printsolution (int index, uint64_t *ptr)
     printf ("V2 = ");
     print_solset (v2);
     printf ("Length = %d\n", v2size);
-}
-
-
-void sima_rand (roulette_s *dst)
-{
-    uint32_t i;
-    
-    for (i = 0; i < pool_->solusize; i++) {
-        ((uint16_t *)&dst->ptr[i])[0] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[1] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[2] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[3] = (uint16_t)rand();
-    }
-    dst->ptr[i-1] &= pool_->cmask;
-    dst->fitness = getfitness(dst->ptr);
-}
-
-int run_simanneal (wgraph_s *g, int sa_hc)
-{
-    float i;
-    int j;
-    uint16_t index, ssize;
-    unsigned char cbuf[CBUF_SIZE];
-    roulette_s *s, *new_s;
-    
-    pool_s_simanneal (g, sa_hc);
-    s = &pool_->rbuf[SIMA_curr];
-    new_s = &pool_->rbuf[SIMA_tmp];
-    s->ptr = pool_->solution;
-    new_s->ptr = &pool_->solution[pool_->solusize];
-    sima_rand(s);
-    for (j = 0; j < pool_->solusize; j++)
-        pool_->bestfeasible[j] = s->ptr[j];
-    if (signal(SIGINT, pSIGINT) == SIG_ERR)
-        throw_exception();
-    if (signal(SIGUSR1, sigNOP) == SIG_ERR)
-        throw_exception();
-    if (pipe (pipe_) == -1)
-        throw_exception();
-    pid_ = fork();
-    if (pid_ < 0)
-        throw_exception();
-    if (pid_) {
-        index = 0;
-        if (sa_hc == SIMULATED_ANNEALING)
-            printf ("Now running Simulated Annealing with solution size: %d\n> ", pool_->bitlen);
-        else
-            printf ("Now running \"Foolish\" Hill Climbing with solution size: %d\n> ", pool_->bitlen);
-        memset (cbuf, 0, sizeof(cbuf));
-        cbuf[CBUF_SIZE-1] = UEOF;
-        while (1) {
-            index = 0;
-            while ((cbuf[index] = (char)getchar()) != '\n') {
-                if (index < CBUF_SIZE-1)
-                    ++index;
-                else
-                    printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
-            }
-            cbuf[index] = UEOF;
-            write(pipe_[1], cbuf, CBUF_SIZE);
-            kill (pid_, SIGUSR1);
-            pause();
-        }
-    }
-    else {
-        if (signal(SIGUSR1, cSIGUSR1) == SIG_ERR)
-            throw_exception();
-        if (signal(SIGINT, sigNOP) == SIG_ERR)
-            throw_exception();
-        ssize = pool_->solusize;
-        while (1) {
-            for (i = 0; i < pool_->iterations; i++) {
-                pool_->perturb (new_s->ptr);
-                new_s->fitness = getfitness(new_s->ptr);
-                if (new_s->fitness < s->fitness || pool_->e_pow()) {
-                    for (j = 0; j < ssize; j++)
-                        s->ptr[j] = new_s->ptr[j];
-                    if (isfeasible(s->ptr)) {
-                        for (j = 0; j < ssize; j++)
-                            pool_->bestfeasible[j] = s->ptr[j];
-                    }
-                    s->fitness = new_s->fitness;
-                    /*printf("%f %f ",s->fitness, s->fitness);
-                     if (isfeasible(s->ptr))
-                     printf("feasible\n");
-                     else
-                     printf("not feasible\n");*/
-                }
-            }
-            pool_->T = pool_->alpha * pool_->T;
-            pool_->iterations = pool_->beta * pool_->T;
-            pool_->gen++;
-        }
-    }
-    return 0;
-    
-exception_:
-    perror("Program Failed Initialization");
-    exit (EXIT_FAILURE);
-}
-
-int e_pow_sa (void)
-{
-    return (SIMA_RAND() < pow (M_E, (pool_->rbuf[SIMA_curr].fitness - pool_->rbuf[SIMA_tmp].fitness) / pool_->T));
-}
-
-int nop_hc (void)
-{
-    return 0;
-}
-
-void printsastatus (void)
-{
-    printf("Status at \"Generation\": %llu\n", pool_->gen);
-    printchrom(pool_->rbuf[SIMA_curr].ptr);
-    printf("\tFitness: %f\n", getfitness(pool_->rbuf[SIMA_curr].ptr));
-    if (isfeasible(pool_->rbuf[SIMA_curr].ptr))
-        printf ("Is Feasible\n");
-    else {
-        printf ("Is not Feasible\n");
-        if (isfeasible(pool_->bestfeasible)) {
-            printf("Best Feasible is: \n");
-            printchrom(pool_->bestfeasible);
-            printf("\tFitness: %f\n", getfitness(pool_->bestfeasible));
-        }
-        else
-            printf ("No 'Good' Feasibles Found.\n");
-    }
 }

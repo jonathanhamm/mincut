@@ -98,14 +98,10 @@ extern pool_s *pool_;
 extern void printpool (void);
 extern int run_ge (wgraph_s *g);
 
-extern int countdigits(uint64_t *cptr);
-extern void printweights (void);
-
 /* Selection Functions */
 extern void roulette_sf (selected_s *parents);
 extern void rank_sf (selected_s *parents);
 extern void tournament_sf (selected_s *parents);
-
 
 /* Crossover Functions */
 extern void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2);
@@ -113,9 +109,11 @@ extern void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *ds
 
 
 
-/* Mutation Functions */
+/* Mutation/Perturbation Functions */
 extern void mutate1 (uint64_t *victim);
 extern void mutate2 (uint64_t *victim);
+extern void singlemove (uint64_t *victim);
+
 
 extern void printsolution (int index, uint64_t *ptr);
 extern void printgestatus (void);

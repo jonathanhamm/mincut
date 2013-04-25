@@ -98,10 +98,9 @@ struct vhash_s
 extern vhash_s vhash_;
 extern gtoken_s *stream_;
 
-
-/*Graph Parsing Routines*/
-extern gtoken_s *lex (unsigned char *buf);
+/* Graph Parsing Routines */
 extern wgraph_s *gparse (const unsigned char *file);
+extern gtoken_s *lex (unsigned char *buf);
 extern void freetokens (gtoken_s *list);
 
 /*graph data structure routines*/
@@ -115,6 +114,7 @@ extern uint16_t vgetindex (vertex_s *v);
 extern void printgraph (wgraph_s *g);
 extern void printsastatus (void);
 
+/* Command line parsing routines */
 extern void cgeparse (void);
 extern void csaparse (void);
 
