@@ -66,8 +66,7 @@ static int sashow (void);
 
 /*
  Main function to invoke for parsing a graph file
- into a graph structure that the program can 
- reference. 
+ into the graph structure used by the program. 
  
  @param file    Name of file containing graph data. 
  @return        Returns a graph data structure.
@@ -82,6 +81,7 @@ wgraph_s *gparse (const unsigned char *file)
         return NULL;
     if (!lex (buf))
         return NULL;
+    free(buf);
     g = parse_();
     if (!g)
         return NULL;
@@ -89,7 +89,7 @@ wgraph_s *gparse (const unsigned char *file)
 }
 
 /* 
- Read a file into a char buffer. 
+ Reads a file into a char buffer. 
  
  @param fname   Name of file to read. 
  @return        Returns a pointer to the buffer holding the file data.
