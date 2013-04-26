@@ -203,9 +203,9 @@ uint16_t vgetindex (vertex_s *v)
  commands entered by the user at runtime. 
  
  Lexer tokenizes based on the following regex: 
- n: (a...Z)+(a...z+0...9)*
- real: (0...9)+<optional_fract>
- <optional_fract>: (dot 0...9)?
+    token:  id | num
+    id:     (a...Z) + (a...z | 0...9)*
+    num:    (0...9)+ (dot (0...9)*)? | (dot (0...9)+)
  
  @param buf Pointer to the buffer that is tokenized. 
  @return    Returns a pointer to a linked list of 
