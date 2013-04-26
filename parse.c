@@ -109,7 +109,7 @@ unsigned char *read_gfile (const char *fname)
         throw_exception();
     for (bsize = INITBUFSIZE, offset = 0; (buf[offset] = (unsigned char)fgetc(f)) != UEOF; offset++) {
         if (offset == bsize-1) {
-            bsize += INITBUFSIZE;
+            bsize *= 2;
             buf = realloc (buf, bsize);
             if (!buf)
                 throw_exception();
