@@ -7,7 +7,7 @@
  This file only contains code for parsing. None of the actual 
  genetic algorithm, simulated annealing, or foolish hill climbing
  code is here. Howerver, this file does have code for building and 
- defiing the data structures used by those algorithms. 
+ defining the data structures used by those algorithms. 
  */
 
 #include "parse.h"
@@ -17,18 +17,18 @@
 #include <string.h>
 
 /* Genetic Algorithm Commandline Constants */
-#define COM_ERR   0
-#define COM_PROB  1
-#define COM_OP    2
-#define COM_X     3
-#define COM_SEL   4
-#define COM_K     5
+#define COM_ERR     0
+#define COM_PROB    1
+#define COM_OP      2
+#define COM_X       3
+#define COM_SEL     4
+#define COM_K       5
 
 /* Simulated Annealing Commandline Constants */
-#define COM_T 1
-#define COM_ITER 2
-#define COM_ALPHA 3
-#define COM_BETA 4
+#define COM_T       1
+#define COM_ITER    2
+#define COM_ALPHA   3
+#define COM_BETA    4
 #define COM_PERTURB 5
 
 /* Global Variables */
@@ -193,6 +193,7 @@ uint16_t vgetindex (vertex_s *v)
                 return ptr->index;
         }
     }
+    return i;
 }
 
 /*
@@ -251,8 +252,10 @@ gtoken_s *lex (unsigned char *buf)
                     *buf = '\0';
                     curr = gtoken_s_ (curr, bckptr, T_ID);
                     *buf = backup;
-                } else if (*buf >= '0' && *buf <= '9') {
-                    for (bckptr = buf, buf++; (*buf >= '0' && *buf <= '9'); buf++) {
+                } else if ((*buf >= '0' && *buf <= '9') || *buf == '.') {
+                    bckptr = buf;
+                    if (*buf != '.')
+                    for (buf++; (*buf >= '0' && *buf <= '9'); buf++) {
                         if (buf - bckptr == MAXLEXLEN) {
                             printf("Too Long ID: %15s", bckptr);
                             throw_exception();
@@ -338,12 +341,18 @@ gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
  the following grammar:
  
  Graph Parsing Grammar:
- <graph> => <nodelist> <edgelist> EOF
- <nodelist> => V={v <nodeparam>}
- <nodeparam> => ,v <nodeparam> | epsilon
- <edgelist> => E={<e> <edgeparam> }
- <edgeparam> => ,<e> <edgeparam> | epsilon
- <e> => {n,n,real}
+ <graph> => 
+    <nodelist> <edgelist> EOF
+ <nodelist> => 
+    V = {v <nodeparam>}
+ <nodeparam> => 
+    , v <nodeparam> | epsilon
+ <edgelist> => 
+    E = {<e> <edgeparam> }
+ <edgeparam> => 
+    ,<e> <edgeparam> | epsilon
+ <e> => 
+    {n,n,real}
  
  @return    Returns a pointer to the graph
             data structure built by the parser.
@@ -377,14 +386,14 @@ void pnodelist_ (wgraph_s *g)
     vertex_s *v;
     
     if (*(uint16_t *)stream_->lexeme == *(uint16_t *)"V") /*if(!strcmp(stream_->lexeme,"v"))*/
-        if (GTNEXT()->type == T_EQU)
-            if (GTNEXT()->type == T_OPENBRACE)
-                if (GTNEXT()->type == T_ID) {
-                    v = vertex_s_(stream_);
-                    vhashinsert (v, g->nvert);
-                    insert_vertex (g, v);
-                    pnodeparam_(g);
-                }
+    if (GTNEXT()->type == T_EQU)
+    if (GTNEXT()->type == T_OPENBRACE)
+    if (GTNEXT()->type == T_ID) {
+        v = vertex_s_(stream_);
+        vhashinsert (v, g->nvert);
+        insert_vertex (g, v);
+        pnodeparam_(g);
+    }
     if (stream_->type == T_CLOSEBRACE)
         return;
     printf ("Syntax Error: %s", stream_->lexeme);
@@ -396,21 +405,21 @@ void pnodeparam_ (wgraph_s *g)
     vertex_s *v;
     
     if (GTNEXT()->type == T_COMMA)
-        if (GTNEXT()->type == T_ID) {
-            v = vertex_s_(stream_);
-            vhashinsert (v, g->nvert);
-            insert_vertex (g, v);
-            pnodeparam_(g);
-            return;
-        }
+    if (GTNEXT()->type == T_ID) {
+        v = vertex_s_(stream_);
+        vhashinsert (v, g->nvert);
+        insert_vertex (g, v);
+        pnodeparam_(g);
+        return;
+    }
 }
 
 void pedgelist_ (wgraph_s *g)
 {
     if (*(uint16_t *)GTNEXT()->lexeme == *(uint16_t *)"E")   /*if (!strcmp(__GTNEXT()->lexeme, "E"))*/
-        if (GTNEXT()->type == T_EQU)
-            if (GTNEXT()->type == T_OPENBRACE)
-                e_(g);
+    if (GTNEXT()->type == T_EQU)
+    if (GTNEXT()->type == T_OPENBRACE)
+        e_(g);
     pedgeparam_(g);
     if (stream_->type == T_CLOSEBRACE)
         return;
@@ -466,6 +475,7 @@ inline wgraph_s *wgraph_s_ (void)
 {
     return calloc(1,sizeof(wgraph_s));
 }
+
 /*
  Vertex "constructor". Constructs a vertex for 
  the graph using a token. 
@@ -811,8 +821,6 @@ void p_show (void)
 
 int p_feasible (void)
 {
-    int index;
-    
     if (!strcmp (stream_->lexeme, "feasible")) {
         GTNEXT();
         return 1;
@@ -823,7 +831,6 @@ int p_feasible (void)
     }
     return 0;
 }
-
 
 /*
  Parser for commands entered at runtime for simulated
@@ -883,15 +890,19 @@ void csaparse (void)
         switch (result) {
             case COM_T:
                 pool_->T = val;
+                printf("Temperature now set to: %f\n", val);
                 break;
             case COM_ITER:
                 pool_->iterations = val;
+                printf("Number of iterationts now set to: %f\n", val);
                 break;
             case COM_ALPHA:
                 pool_->alpha = val;
+                printf("Alpha now set to: %f\n", val);
                 break;
             case COM_BETA:
                 pool_->beta = val;
+                printf("Beta now set to: %f\n", val);
                 break;
             case COM_PERTURB:
                 if (val <=1) {

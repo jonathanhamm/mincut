@@ -5,6 +5,10 @@
  Description:
  
  Library implemented by parse.c
+ 
+ This is a library for all the parsing operations needed 
+ for the genetic algorithm, simulated annealing, and foolish
+ hill climbing. 
  */
 
 #ifndef _GPARSE_H_

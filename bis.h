@@ -5,6 +5,10 @@
  Description:
  
  Library implemented by bis.c
+ This is a library with all the functions that run the
+ genetic algorithm, simulated annealing, and foolish 
+ hill climbing. The code for these algorithms is 
+ implemented in bis.c
  */
 
 #ifndef _BIS_H_
@@ -13,13 +17,13 @@
 #include <stdint.h>
 #include <time.h>
 
-/* Preprocessor Macros Soley for Inserting Code for testing Algorithm */
+/* Macros soley used for inserting testing code for the algorithms */
 #define TESTMODE
 //#undef TESTMODE
 #ifdef TESTMODE
-    #define OPTIMAL 32.0
+    #define OPTIMAL 128
     #define MGEN
-    //#undef MGEN
+    #undef MGEN
     #define MAX_GENERATIONS 1000
     #define EXITOPTGE()  {\
                         printf ("\nFound Optimal\n"); \
@@ -76,9 +80,9 @@
 #define CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0))
 
 /* Simulated Annealing Constants */
-#define SIMA_i0     1.0
-#define SIMA_t0     10000.0
-#define SIMA_alpha  0.80    /* 0 < alpha < 1 */
+#define SIMA_i0     10
+#define SIMA_t0     5000
+#define SIMA_alpha  0.945    /* 0 < alpha < 1 */
 #define SIMA_beta   1.05    /* beta > 1, but preferable: 1.01 <= beta <= 1.05 */
 #define SIMA_curr   0
 #define SIMA_tmp    1
@@ -89,8 +93,6 @@
 #define HILL_CLIMBNG  0
 
 typedef struct pool_s pool_s;
-
-/*Chromosomes are Little Endian, and Packed into a 64-bit alligned buffer*/
 typedef struct roulette_s roulette_s;
 typedef struct selected_s selected_s;
 typedef struct ppair_s ppair_s;

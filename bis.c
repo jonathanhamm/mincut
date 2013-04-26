@@ -120,13 +120,16 @@ void pool_s_ (wgraph_s *g)
     ptr = pool_->popul;
     /* Initialize Chromosomes Randomly */
     for (i = 0; i < POOLSIZE; i++) {
-        for (j = 0; j < pool_->chromsize; j++, ptr++) {
-            ((uint16_t *)ptr)[0] = (uint16_t)rand();
-            ((uint16_t *)ptr)[1] = (uint16_t)rand();
-            ((uint16_t *)ptr)[2] = (uint16_t)rand();
-            ((uint16_t *)ptr)[3] = (uint16_t)rand();
+        do {
+            for (j = 0; j < pool_->chromsize; j++, ptr++) {
+                ((uint16_t *)ptr)[0] = (uint16_t)rand();
+                ((uint16_t *)ptr)[1] = (uint16_t)rand();
+                ((uint16_t *)ptr)[2] = (uint16_t)rand();
+                ((uint16_t *)ptr)[3] = (uint16_t)rand();
+            }
+            *(ptr-1) &= pool_->cmask;
         }
-        *(ptr-1) &= pool_->cmask;
+        while (!isfeasible(ptr));
     }
     pool_->graph = g;
     pool_->mutateprob = INITMUTATIONPROB;
@@ -282,8 +285,8 @@ int iscut(uint64_t *chrom, vertex_s *v)
  find-first-set-bit instruction (many architectures have
  an instruction that can find the first set bit in a 
  register, Intel's is 'bsf'). The processed set bits 
- are then masked out to zero in the loop. The call to ffsl 
- returns the position of the first set bit. The compiler 
+ are then masked out to zero (unset) in the loop. The call to  
+ ffsl returns the position of the first set bit. The compiler 
  inlines this function so it's just the instruction. The bit 
  position can be used to access a vertex in the graph. Then
  the function looks at every edge connected to the graph, and
@@ -312,8 +315,8 @@ double sumweights (uint64_t *chrom)
             pos = ffsl(iter);
             if (!pos)
                 break;
-            --pos;
-            v = pool_->graph->vtable[/* i*64 */ (i << 6) + pos];
+            pos--;
+            v = pool_->graph->vtable[(i * 64) + pos];
             nedges = v->nedges;
             edges = v->edges;
             for (j = 0; j < nedges; j++) {
@@ -335,11 +338,11 @@ double sumweights (uint64_t *chrom)
  */
 double getfitness (uint64_t *chrom)
 {
-    int setcount, differ;
+    uint16_t setcount, differ;
     
     setcount = countdigits (chrom);
     differ = abs(2*setcount - pool_->bitlen);
-    return sumweights (chrom) + (differ << 4);
+    return sumweights(chrom) + (differ*16);
 }
 
 /*
@@ -383,7 +386,7 @@ void computeprob (void)
 }
 
 /* 
- Checks of a chromosome is feasible or not. 
+ Checks if a chromosome is feasible or not. 
  
  @param chrom   Chromosome to check if feasible. 
  @return        Returns 1 if feasible, and 0 if not. 
@@ -450,7 +453,7 @@ int bsearch_r (roulette_s *roul, uint32_t key)
             return mid;
     }
     if (mid == POOLSIZE)
-        --mid;
+        mid--;
     return mid;
 }
 
@@ -860,11 +863,11 @@ int run_simanneal (wgraph_s *g, int sa_hc)
                 if (new_s->fitness < s->fitness || pool_->e_pow()) {
                     for (j = 0; j < ssize; j++)
                         s->ptr[j] = new_s->ptr[j];
-                    if (isfeasible(s->ptr)) {
+                    s->fitness = new_s->fitness;
+                    if (isfeasible(s->ptr) && s->fitness < getfitness(pool_->bestfeasible)) {
                         for (j = 0; j < ssize; j++)
                             pool_->bestfeasible[j] = s->ptr[j];
                     }
-                    s->fitness = new_s->fitness;
                 }
                 pool_->nperturbations++;
 #ifdef TESTMODE
@@ -888,24 +891,16 @@ exception_:
 }
 
 /*
- Randomly generates a solution for simulated annealing or 
- foolish hill climbing and computes its fitness. 
+ Randomly generates a feasible solution for simulated annealing 
+ or foolish hill climbing and computes its fitness. 
  
  @param dst     A pointer to the structure that will contain 
                 the randomly generated solution and its fitness. 
  */
 void sima_rand (roulette_s *dst)
 {
-    uint32_t i;
-    
-    for (i = 0; i < pool_->solusize; i++) {
-        ((uint16_t *)&dst->ptr[i])[0] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[1] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[2] = (uint16_t)rand();
-        ((uint16_t *)&dst->ptr[i])[3] = (uint16_t)rand();
-    }
-    dst->ptr[i-1] &= pool_->cmask;
-    dst->fitness = getfitness(dst->ptr);
+    while (!isfeasible(dst->ptr))
+        setbit(dst->ptr, rand() % pool_->bitlen, 1);
 }
 
 /*
