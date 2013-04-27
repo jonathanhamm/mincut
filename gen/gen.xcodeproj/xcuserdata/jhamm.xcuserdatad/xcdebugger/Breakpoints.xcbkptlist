@@ -186,5 +186,16 @@
          startingLineNumber = "50"
          endingLineNumber = "50">
       </FileBreakpoint>
+      <FileBreakpoint
+         shouldBeEnabled = "No"
+         ignoreCount = "0"
+         continueAfterRunningActions = "No"
+         filePath = "../bis.h"
+         timestampString = "388714887.107876"
+         startingColumnNumber = "9223372036854775807"
+         endingColumnNumber = "9223372036854775807"
+         startingLineNumber = "162"
+         endingLineNumber = "162">
+      </FileBreakpoint>
    </FileBreakpoints>
 </Bucket>

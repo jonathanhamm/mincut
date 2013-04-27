@@ -204,13 +204,13 @@ uint16_t vgetindex (vertex_s *v)
  
  Lexer tokenizes based on the following regex: 
     token:  id | num
-    id:     (a...Z) + (a...z | 0...9)*
+    id:     (a...Z)+ (a...z | 0...9)*
     num:    (0...9)+ (dot (0...9)*)? | (dot (0...9)+)
  
- @param buf Pointer to the buffer that is tokenized. 
- @return    Returns a pointer to a linked list of 
-            tokens on success, and NULL on if there 
-            is a lexical error.
+ @param     buf     Pointer to the buffer that is tokenized.
+ @return            Returns a pointer to a linked list of 
+                    tokens on success, and NULL on if there 
+                    is a lexical error.
  */
 gtoken_s *lex (unsigned char *buf)
 {
@@ -341,17 +341,22 @@ gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
  the following grammar:
  
  Graph Parsing Grammar:
- <graph> => 
+ <graph>=> 
     <nodelist> <edgelist> EOF
- <nodelist> => 
+ 
+ <nodelist>=> 
     V = {v <nodeparam>}
- <nodeparam> => 
+ 
+ <nodeparam>=> 
     , v <nodeparam> | epsilon
- <edgelist> => 
+ 
+ <edgelist>=> 
     E = {<e> <edgeparam> }
- <edgeparam> => 
+ 
+ <edgeparam>=> 
     ,<e> <edgeparam> | epsilon
- <e> => 
+ 
+ <e>=> 
     {n,n,real}
  
  @return    Returns a pointer to the graph
@@ -610,23 +615,24 @@ vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
  following grammar:
 
  <cparse>=>
- status | exit | quit | q | Q
- |
- set <op> numreal | get <op> | show <show>
+    status | exit | quit | q | Q
+    |
+    set <op> numreal | get <op> | show <show>
  
  <op>=>
- mutate <mutate> | cross | select | k
+    mutate <mutate> | cross | select | k
  
  <mutate>=>
- op | prob
+    op | prob
  
  <selection>=>
- selection id
+    selection id
  
  <show>=>
- numint | best <feasible>
+    numint | best <feasible>
  
- <feasible>=> feasible | epsilon
+ <feasible>=> 
+    feasible | epsilon
  */
 void cgeparse (void)
 {

@@ -99,7 +99,7 @@ void pool_s_ (wgraph_s *g)
         perror ("Heap Allocation Error");
         exit (EXIT_FAILURE);
     }
-    pool_->chromsize = (g->nvert / 64) + (g->nvert % 64 != 0);
+    pool_->nqwords = (g->nvert / 64) + (g->nvert % 64 != 0);
     pool_->remain = g->nvert % 64;
     /* 
      For chromosomes that don't align with 64 bits, the extra bits
@@ -121,7 +121,7 @@ void pool_s_ (wgraph_s *g)
     /* Initialize Chromosomes Randomly */
     for (i = 0; i < POOLSIZE; i++) {
         do {
-            for (j = 0; j < pool_->chromsize; j++, ptr++) {
+            for (j = 0; j < pool_->nqwords; j++, ptr++) {
                 ((uint16_t *)ptr)[0] = (uint16_t)rand();
                 ((uint16_t *)ptr)[1] = (uint16_t)rand();
                 ((uint16_t *)ptr)[2] = (uint16_t)rand();
@@ -133,8 +133,8 @@ void pool_s_ (wgraph_s *g)
     }
     pool_->graph = g;
     pool_->mutateprob = INITMUTATIONPROB;
-    pool_->bitlen = ((pool_->remain) ? ((pool_->chromsize * 64) - (64 - pool_->remain)) : pool_->chromsize*64);
-    for (sum = 0, ptr = pool_->popul, i = 0; i < POOLSIZE; i++, ptr += pool_->chromsize) {
+    pool_->bitlen = ((pool_->remain) ? ((pool_->nqwords * 64) - (64 - pool_->remain)) : pool_->nqwords*64);
+    for (sum = 0, ptr = pool_->popul, i = 0; i < POOLSIZE; i++, ptr += pool_->nqwords) {
         pool_->rbuf[i].fitness = getfitness (ptr);
         pool_->rbuf[i].ptr = ptr;
         sum += pool_->rbuf[i].fitness;
@@ -169,7 +169,7 @@ void pool_s_simanneal (wgraph_s *g, int sa_hc)
     }
     pool_->solusize = (g->nvert / 64) + (g->nvert % 64 != 0);
     pool_->remain = g->nvert % 64;
-    pool_->bitlen = ((pool_->remain) ? ((pool_->chromsize * 64) - (64 - pool_->remain)) : pool_->chromsize*64);
+    pool_->bitlen = ((pool_->remain) ? ((pool_->nqwords * 64) - (64 - pool_->remain)) : pool_->nqwords*64);
     /*
      For solutions that don't align with 64 bits, the extra bits
      in the partially filled (last quad word) 64-bit word need to be
@@ -236,7 +236,7 @@ uint16_t countdigits (uint64_t *cptr)
 {
     int i, count, n;
     
-    n = pool_->chromsize-1;
+    n = pool_->nqwords-1;
     for (i = 0, count = 0; i < n; i++) {
         count += countbitsLW((uint32_t)cptr[i]);
         count += countbitsLW((uint32_t)(cptr[i] >> 32));
@@ -264,11 +264,8 @@ uint16_t countdigits (uint64_t *cptr)
  */
 int iscut(uint64_t *chrom, vertex_s *v)
 {
-    uint16_t i, nvert;
-    vertex_s **vtable;
+    uint16_t i;
     
-    nvert = pool_->graph->nvert;
-    vtable = pool_->graph->vtable;
     i = vgetindex (v);
     if ((~chrom[i / 64] & (1llu << (i % 64))))
         return 1;
@@ -306,8 +303,8 @@ double sumweights (uint64_t *chrom)
     edge_s **edges;
     double weight;
     
-    for (weight = 0, i = 0, ptr = chrom; i < pool_->chromsize; i++, ptr++) {
-        if (i == pool_->chromsize-1 && pool_->remain)
+    for (weight = 0, i = 0, ptr = chrom; i < pool_->nqwords; i++, ptr++) {
+        if (i == pool_->nqwords-1 && pool_->remain)
             csize = pool_->remain;
         else
             csize = 64;
@@ -543,9 +540,9 @@ void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
     
     backup1 = &pool_->popul[CRBACKUP1];
     backup2 = &pool_->popul[CRBACKUP2];
-    for (i = 0; i < pool_->chromsize; i++)
+    for (i = 0; i < pool_->nqwords; i++)
         backup1[i] = p1[i];
-    for (i = 0; i < pool_->chromsize; i++)
+    for (i = 0; i < pool_->nqwords; i++)
         backup2[i] = p2[i];
     point = rand() % (pool_->bitlen / CR_N);
     inv = pool_->bitlen - point;
@@ -596,7 +593,7 @@ void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
     uint16_t i;
     uint64_t  mask,  backup;
     
-    for (i = 0; i < pool_->chromsize; i++) {
+    for (i = 0; i < pool_->nqwords; i++) {
         ((uint16_t *)&mask)[0] = (uint16_t)rand();
         ((uint16_t *)&mask)[1] = (uint16_t)rand();
         ((uint16_t *)&mask)[2] = (uint16_t)rand();
@@ -719,7 +716,7 @@ int run_ge (wgraph_s *g)
             throw_exception();
         if (signal(SIGINT, sigNOP) == SIG_ERR)
             throw_exception();
-        n = pool_->chromsize;
+        n = pool_->nqwords;
         time((time_t *)&pool_->start);
         /* 
          *
@@ -1041,7 +1038,7 @@ void printchrom (uint64_t *chrom)
 {
     uint16_t i, n;
     
-    n = pool_->chromsize;
+    n = pool_->nqwords;
     for (i = 0; i < n; i++) {
         if (i == n-1)
             printqword (chrom[i], pool_->remain);
@@ -1055,7 +1052,7 @@ void printpool (void)
     uint16_t i, n;
     uint64_t *ptr;
     
-    n = pool_->chromsize;
+    n = pool_->nqwords;
     ptr = pool_->popul;
     for (i = 0; i < POOLSIZE; i++) {
         printf("%d:\t", i);

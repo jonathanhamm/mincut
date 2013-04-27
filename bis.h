@@ -123,7 +123,7 @@ struct selected_s
 struct pool_s
 {
     uint64_t gen;               /*generation number*/
-    uint16_t chromsize;         /*size of chromosome in quad (64 bit) words*/
+    uint16_t nqwords;           /*size of chromosome in quad (64 bit) words*/
     uint16_t bitlen;            /*size of chromosome in bits*/
     uint64_t cmask;             /*bit mask for each chromosome*/
     uint8_t remain;             /*Remainder bits that carry over in new quad word*/
@@ -158,7 +158,7 @@ struct pool_s
     int  (*e_pow) (void);
 #define is_not_ge e_pow
 #define perturb mutate
-#define solusize chromsize
+#define solusize nqwords
 #define solution popul
 #define nperturbations gen
     /* Population. This is contiguously appended at the end of the structure at runtime. */
