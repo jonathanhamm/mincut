@@ -140,7 +140,7 @@ struct pool_s
     /* Dynamically Bound Functions: */
     
     /* Simulated Annealing and Hill Climbing Parameters*/
-    float iterations, T, alpha, beta;
+    double iterations, T, alpha, beta;
     /* Selection Function */
     void (*select) (selected_s *);
     /* Crossover Function */

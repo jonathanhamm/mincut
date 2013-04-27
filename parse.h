@@ -77,7 +77,7 @@ struct vertex_s
 /* Graph Edge Structure */
 struct edge_s
 {
-    float weight;
+    double weight;
     vertex_s *v1;
     vertex_s *v2;
 };
@@ -100,7 +100,7 @@ struct vhash_s
 };
 
 /* Global Variables */
-extern vhash_s vhash_;      //vertex hash
+extern vhash_s  vhash_;     //vertex hash
 extern gtoken_s *stream_;   //linked list of tokens (token stream)
 
 /* Graph Parsing Routines */

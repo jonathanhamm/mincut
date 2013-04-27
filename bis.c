@@ -42,9 +42,9 @@ struct solset_s
 };
 
 /* Global Variables */
-static pid_t pid_;
-static int pipe_[2];
-pool_s *pool_;
+static pid_t    pid_;
+static int      pipe_[2];
+pool_s          *pool_;
 
 /* Constructors for Genetic Algorithm Pool and Simulated Annealing & Hill Climbing "Pool" */
 static void pool_s_ (wgraph_s *g);
@@ -90,9 +90,9 @@ static void print_solset (solset_s *solset);
  */
 void pool_s_ (wgraph_s *g)
 {
-    uint16_t  i, j;
-    uint64_t  *ptr;
-    double sum;
+    uint16_t    i, j;
+    uint64_t    *ptr;
+    double      sum;
     
     pool_ = calloc(1, sizeof(*pool_) + POOLSIZE * CQWORDSIZE(g->nvert+1) * 8);
     if (!pool_) {
@@ -118,7 +118,7 @@ void pool_s_ (wgraph_s *g)
     pool_->k = TOURN_K;
     pool_->gen = 0;
     ptr = pool_->popul;
-    /* Initialize Chromosomes Randomly */
+    /* Initialize chromosomes randomly, but they must be feasible. */
     for (i = 0; i < POOLSIZE; i++) {
         do {
             for (j = 0; j < pool_->nqwords; j++, ptr++) {
@@ -295,13 +295,12 @@ int iscut(uint64_t *chrom, vertex_s *v)
  */
 double sumweights (uint64_t *chrom)
 {
-    uint8_t pos;
-    uint16_t i, j, csize, nedges;
-    uint64_t iter,
-    *ptr;
-    vertex_s *v;
-    edge_s **edges;
-    double weight;
+    uint8_t     pos;
+    uint16_t    i, j, csize, nedges;
+    uint64_t    iter, *ptr;
+    vertex_s    *v;
+    edge_s      **edges;
+    double      weight;
     
     for (weight = 0, i = 0, ptr = chrom; i < pool_->nqwords; i++, ptr++) {
         if (i == pool_->nqwords-1 && pool_->remain)
@@ -369,8 +368,8 @@ int prcmp (roulette_s *a, roulette_s *b)
  */
 void computeprob (void)
 {
-    uint16_t i, n;
-    double sum;
+    uint16_t    i;
+    double      sum;
     
     sum = pool_->fitsum;
     for (pool_->accum = 0, i = 0; i < POOLSIZE; i++) {
@@ -407,16 +406,16 @@ int isfeasible (uint64_t *chrom)
  */
 void roulette_sf (selected_s *parents)
 {
-    int i, j;
-    uint32_t i1, i2;
-    float sum;
+    uint32_t    i,  j,
+                i1, i2;
+    double      sum;
     
     for (i = 0; i < NSELECT; i++) {
         i1 = rand() % pool_->accum;
         i2 = rand() % pool_->accum;
-        for (j = 0, sum = 0; j < POOLSIZE && sum <= (float)i1; sum += pool_->rbuf[j].prob, j++);
+        for (j = 0, sum = 0; j < POOLSIZE && sum <= (double)i1; sum += pool_->rbuf[j].prob, j++);
         i1 = (j == POOLSIZE) ? j-1 : j;
-        for (j = 0, sum = 0; j < POOLSIZE && sum <= (float)i2; sum += pool_->rbuf[j].prob, j++);
+        for (j = 0, sum = 0; j < POOLSIZE && sum <= (double)i2; sum += pool_->rbuf[j].prob, j++);
         i2 = (j == POOLSIZE) ? j-1 : j;
         if (i2 == i1)
             i2 = (i2 - 1) % POOLSIZE;
@@ -463,8 +462,9 @@ int bsearch_r (roulette_s *roul, uint32_t key)
  */
 void rank_sf (selected_s *parents)
 {
-    int i;
-    uint32_t i1, i2;
+    int         i;
+    uint32_t    i1, i2;
+    
     for (i = 0; i < NSELECT; i++) {
         i1 = bsearch_r (pool_->rbuf, rand() % pool_->ranksum);
         i2 = bsearch_r (pool_->rbuf, rand() % pool_->ranksum);
@@ -484,10 +484,10 @@ void rank_sf (selected_s *parents)
  */
 void tournament_sf (selected_s *parents)
 {
-    int       i;
-    uint8_t   k, R;
-    uint32_t  i1a, i1b,
-    i2a, i2b;
+    int         i;
+    uint8_t     k, R;
+    uint32_t    i1a, i1b,
+                i2a, i2b;
     
     for (i = 0, k = pool_->k; i < NSELECT; i++) {
         i1a = rand() % POOLSIZE;
@@ -533,10 +533,9 @@ void tournament_sf (selected_s *parents)
  */
 void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
 {
-    int i, j, pindex;
-    uint16_t point, inv;
-    uint64_t mask;
-    uint64_t *backup1, *backup2;
+    uint16_t    i, j,
+                point, inv;
+    uint64_t    *backup1, *backup2;
     
     backup1 = &pool_->popul[CRBACKUP1];
     backup2 = &pool_->popul[CRBACKUP2];
@@ -590,8 +589,8 @@ void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
  */
 void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
 {
-    uint16_t i;
-    uint64_t  mask,  backup;
+    uint16_t    i;
+    uint64_t    mask, backup;
     
     for (i = 0; i < pool_->nqwords; i++) {
         ((uint16_t *)&mask)[0] = (uint16_t)rand();
@@ -614,8 +613,7 @@ void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
  */
 void mutate1 (uint64_t *victim)
 {
-    int i, n;
-    uint16_t index;
+    uint16_t i, n, index;
     
     n = rand() % (pool_->bitlen / MDIV_CONST);
     if (!(n % 2) && !isfeasible(victim))
@@ -652,8 +650,7 @@ void mutate2 (uint64_t *victim)
  */
 void pairwise_ex (uint64_t *victim)
 {
-    int backup;
-    uint16_t index1, index2;
+    uint16_t backup, index1, index2;
     
     index1 = rand() % pool_->bitlen;
     while ((index2 = rand() % pool_->bitlen) == index1);
@@ -672,13 +669,12 @@ void pairwise_ex (uint64_t *victim)
  */
 int run_ge (wgraph_s *g)
 {
-    int i;
-    uint16_t n, index;
-    selected_s parents;
-    uint64_t *p1, *p2;
-    uint64_t *dst1, *dst2;
-    roulette_s *rp1, *rp2, *rpt;
-    unsigned char cbuf[CBUF_SIZE];
+    uint16_t        i, n, index;
+    uint64_t        *p1, *p2,
+                    *dst1, *dst2;
+    selected_s      parents;
+    roulette_s      *rp1, *rp2, *rpt;
+    unsigned char   cbuf[CBUF_SIZE];
     
     if (signal(SIGINT, pSIGINT) == SIG_ERR)
         throw_exception();
@@ -795,11 +791,10 @@ exception_:
  */
 int run_simanneal (wgraph_s *g, int sa_hc)
 {
-    float i;
-    int j;
-    uint16_t index, ssize;
-    unsigned char cbuf[CBUF_SIZE];
-    roulette_s *s, *new_s;
+    double          i;
+    uint16_t        index, ssize, j;
+    roulette_s      *s, *new_s;
+    unsigned char   cbuf[CBUF_SIZE];
     
     pool_s_simanneal (g, sa_hc);
     s = &pool_->rbuf[SIMA_curr];
@@ -934,9 +929,8 @@ int nop_hc (void)
  */
 void cSIGUSR1 (int signal)
 {
-    int tmpint;
-    unsigned char cbuf[CBUF_SIZE];
-    gtoken_s *head;
+    gtoken_s        *head;
+    unsigned char   cbuf[CBUF_SIZE];
     
     read(pipe_[0], cbuf, CBUF_SIZE);
     head = lex (cbuf);
@@ -1107,12 +1101,11 @@ void print_solset (solset_s *solset)
 }
 
 void printsolution (int index, uint64_t *ptr)
-{
-    int       i;
-    float     fitness;
-    uint64_t  *chrom;
-    int       v1size, v2size;
-    solset_s  *v1,    *v2;
+{   
+    double      fitness;
+    uint16_t    i, v1size, v2size;
+    uint64_t    *chrom;
+    solset_s    *v1, *v2;
     
     if (ptr)
         chrom = ptr;

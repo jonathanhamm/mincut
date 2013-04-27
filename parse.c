@@ -17,7 +17,7 @@
 #include <string.h>
 
 /* Genetic Algorithm Commandline Constants */
-#define COM_ERR     0
+#define COM_ERR     -1
 #define COM_PROB    1
 #define COM_OP      2
 #define COM_X       3
@@ -32,9 +32,9 @@
 #define COM_PERTURB 5
 
 /* Global Variables */
-vhash_s vhash_;     //hash (declared extern in parse.h)
-gtoken_s *stream_;  //token stream
-pool_s *pool_;      //pool of chromosomes (declared extern in bis.h, and linked in bis.c)
+vhash_s     vhash_;     //hash (declared extern in parse.h)
+gtoken_s    *stream_;   //token stream
+pool_s      *pool_;     //pool of chromosomes (declared extern in bis.h, and linked in bis.c)
 
 /* reads file into a buffer */
 static unsigned char *read_gfile(const char *fname);
@@ -73,14 +73,16 @@ static int sashow (void);
  */ 
 wgraph_s *gparse (const unsigned char *file)
 {
-    wgraph_s *g;
-    unsigned char *buf;
+    wgraph_s        *g;
+    unsigned char   *buf;
     
     buf = read_gfile (file);
     if (!buf)
         return NULL;
-    if (!lex (buf))
-        return NULL;
+    if (!lex (buf)) {
+        perror("Parsing Graph Failed");
+        exit(EXIT_FAILURE);
+    }
     free(buf);
     g = parse_();
     if (!g)
@@ -96,10 +98,9 @@ wgraph_s *gparse (const unsigned char *file)
  */
 unsigned char *read_gfile (const char *fname)
 {
-    FILE *f;
-    size_t offset,
-    bsize;
-    unsigned char *buf;
+    FILE            *f;
+    size_t          offset, bsize;
+    unsigned char   *buf;
     
     f = fopen(fname,"r");
     if(!f)
@@ -141,8 +142,8 @@ exception_:
  */
 int vhashinsert (vertex_s *v, uint16_t index)
 {
-    uint16_t i;
-    vrec_s *ptr;
+    uint16_t    i;
+    vrec_s      *ptr;
     
     i = (unsigned long)v % VHTABLESIZE;
     if (vhash_.table[i].isoccupied) {
@@ -181,8 +182,8 @@ int vhashinsert (vertex_s *v, uint16_t index)
  */
 uint16_t vgetindex (vertex_s *v)
 {
-    uint16_t i;
-    vrec_s *ptr;
+    uint16_t    i;
+    vrec_s      *ptr;
     
     i = (unsigned long)v % VHTABLESIZE;
     if (vhash_.table[i].v == v)
@@ -205,7 +206,8 @@ uint16_t vgetindex (vertex_s *v)
  Lexer tokenizes based on the following regex: 
     token:  id | num
     id:     (a...Z)+ (a...z | 0...9)*
-    num:    (0...9)+ (dot (0...9)*)? | (dot (0...9)+)
+    num:    magnit | - magnit
+    magnit: (0...9)+ (dot (0...9)*)? | (dot (0...9)+)
  
  @param     buf     Pointer to the buffer that is tokenized.
  @return            Returns a pointer to a linked list of 
@@ -214,11 +216,12 @@ uint16_t vgetindex (vertex_s *v)
  */
 gtoken_s *lex (unsigned char *buf)
 {
-    unsigned char   backup;
-    unsigned char   *bckptr;
+    unsigned char   backup, gotnum,
+                    *bckptr;
     gtoken_s        *curr;
     
     stream_ = NULL;
+    gotnum = 0;
     for (curr = NULL, bckptr = buf; *buf != UEOF;) {
         switch (*buf) {
             case ',':
@@ -244,7 +247,6 @@ gtoken_s *lex (unsigned char *buf)
                     for (bckptr = buf, ++buf; (*buf >= 'A' && *buf <= 'Z') || (*buf >= 'a' && *buf <= 'z')
                          || (*buf >= '0' && *buf <= '9'); buf++) {
                         if (buf - bckptr == MAXLEXLEN) {
-                            printf("Too Long ID: %15s", bckptr);
                             throw_exception();
                         }
                     }
@@ -252,27 +254,48 @@ gtoken_s *lex (unsigned char *buf)
                     *buf = '\0';
                     curr = gtoken_s_ (curr, bckptr, T_ID);
                     *buf = backup;
-                } else if ((*buf >= '0' && *buf <= '9') || *buf == '.') {
+                } else if ((*buf >= '0' && *buf <= '9') || *buf == '.' || *buf == '-') {
                     bckptr = buf;
-                    if (*buf != '.')
-                    for (buf++; (*buf >= '0' && *buf <= '9'); buf++) {
-                        if (buf - bckptr == MAXLEXLEN) {
-                            printf("Too Long ID: %15s", bckptr);
+                    if (*buf >= '0' && *buf <= '9')
+                        gotnum = 1;
+                    else if (*buf == '-') {
+                        buf++;
+                        if ((*buf < '0' || *buf > '9') && *buf != '.') {
+                            printf ("Symbol Error %.15s\n", bckptr);
                             throw_exception();
                         }
+                        else if ((*buf >= '0' && *buf <= '9'))
+                            gotnum = 1;
                     }
-                    if (*buf == '.') {
-                        for (buf++; (*buf >='0' && *buf <= '9'); buf++) {
+                    if (*buf != '.') {
+                        for (buf++; (*buf >= '0' && *buf <= '9'); buf++) {
+                            gotnum = 1;
                             if (buf - bckptr == MAXLEXLEN) {
-                                printf("Too Long ID: %15s", bckptr);
+                                printf("Too Long ID: %.15s", bckptr);
                                 throw_exception();
                             }
                         }
                     }
-                    backup = *buf;
-                    *buf = '\0';
-                    curr = gtoken_s_ (curr, bckptr, T_NUM);
-                    *buf = backup;
+                    if (*buf == '.') {
+                        for (buf++; (*buf >='0' && *buf <= '9'); buf++) {
+                            gotnum = 1;
+                            if (buf - bckptr == MAXLEXLEN) {
+                                printf("Too Long ID: %.15s", bckptr);
+                                throw_exception();
+                            }
+                        }
+                    }
+                    if (gotnum) {
+                        backup = *buf;
+                        *buf = '\0';
+                        gotnum = 0;
+                        curr = gtoken_s_ (curr, bckptr, T_NUM);
+                        *buf = backup;
+                    }
+                    else {
+                        printf("Symbol Error %c\n", *bckptr);
+                        throw_exception();
+                    }
                 } else {
                     printf("Symbol Error %c\n", *bckptr);
                     throw_exception();
@@ -415,7 +438,6 @@ void pnodeparam_ (wgraph_s *g)
         vhashinsert (v, g->nvert);
         insert_vertex (g, v);
         pnodeparam_(g);
-        return;
     }
 }
 
@@ -440,9 +462,9 @@ void pedgeparam_ (wgraph_s *g)
 
 void e_ (wgraph_s *g)
 {
-    float      weight;
+    double      weight;
     vertex_s    *v1,
-    *v2;
+                *v2;
     
     if (GTNEXT()->type == T_OPENBRACE)
     if (GTNEXT()->type == T_ID) {
@@ -562,7 +584,7 @@ exception_:
 int insert_vertex (wgraph_s *graph, vertex_s *v)
 {
     static uint16_t cvtablesize;
-    vertex_s **vtable;
+    vertex_s        **vtable;
     
     vtable = graph->vtable;
     if (!vtable) {
@@ -599,11 +621,10 @@ exception_:
  */
 vertex_s *v_lookup (wgraph_s *graph, unsigned char *key)
 {
-    uint16_t i;
-    uint8_t it;
+    uint16_t    i;
     
     for (i = 0; i < graph->nvert; i++) {
-        if (!strcmp(key,graph->vtable[i]->name))
+        if (!strcmp(key, graph->vtable[i]->name))
             return graph->vtable[i];
     }
     return NULL;
@@ -646,6 +667,10 @@ void cgeparse (void)
         !strcmp (stream_->lexeme, "Q")
         )
     {
+        if (GTNEXT()->type != T_EOF) {
+            printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
+            return;
+        }
         printf("Final:\n");
         printgestatus ();
         kill(getppid(), SIGQUIT);
@@ -653,10 +678,14 @@ void cgeparse (void)
     }
     else if (!strcmp(stream_->lexeme, "set")) {
         GTNEXT();
-        result = p_op ();
+        result = p_op();
         if (stream_->type == T_NUM) {
             val = atoi (stream_->lexeme);
             GTNEXT();
+            if (stream_->type != T_EOF) {
+                printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
+                return;
+            }
             switch (result) {
                 case COM_OP:
                     if (val <= 1) {
@@ -691,7 +720,7 @@ void cgeparse (void)
                 case COM_SEL:
                     if (val <= 1) {
                         pool_->select = roulette_sf;
-                        printf("Now using roulette selection.");
+                        printf("Now using roulette selection.\n");
                     }
                     else if (val == 2) {
                         pool_->select = rank_sf;
@@ -716,6 +745,10 @@ void cgeparse (void)
     else if (!strcmp(stream_->lexeme, "get")) {
         GTNEXT();
         result = p_op();
+        if (stream_->type != T_EOF) {
+            printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
+            return;
+        }
         switch (result) {
             case COM_OP:
                 if (pool_->mutate == mutate1)
@@ -812,7 +845,11 @@ void p_show (void)
     }
     else if (!strcmp (stream_->lexeme, "best")) {
         GTNEXT();
-        result = p_feasible ();
+        result = p_feasible();
+        if (stream_->type != T_EOF) {
+            printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
+            return;
+        }
         if (!result)
             printsolution (POOLSIZE-1, NULL);
         else if (result == 1) {
@@ -833,7 +870,7 @@ int p_feasible (void)
     }
     else if (stream_->type != T_EOF) {
         printf ("Expected 'feasible' or nothing, but got '%s'.\n", stream_->lexeme);
-        return -1;
+        return COM_ERR;
     }
     return 0;
 }
@@ -844,28 +881,29 @@ int p_feasible (void)
  to the following grammar:
  
  <cparse>=>
- status | exit | quit | q | Q
- |
- set <saparam> num
- |
- get <saparam>
- |
- show <show>
+    status | exit | quit | q | Q
+    |
+    set <saparam> num
+    |
+    get <saparam>
+    |
+    show <show>
  
  <saparam>=>
- temp | alpha | iter | beta | perturb
+    temp | alpha | iter | beta | perturb
  
  <show>=>
- best <feasible>
- |
- epsilon
+    best <feasible>
+    |
+    epsilon
  
- <feasible>=> feasible | epsilon
+ <feasible>=> 
+    feasible | epsilon
  */
 void csaparse (void)
 {
-    int result;
-    float val;
+    int     result;
+    double  val;
     
     if (
         !strcmp (stream_->lexeme, "exit")  ||
@@ -875,6 +913,10 @@ void csaparse (void)
         !strcmp (stream_->lexeme, "Q")
         )
     {
+        if (GTNEXT()->type != T_EOF) {
+            printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
+            return;
+        }
         printf("Final:\n");
         printsastatus ();
         kill(getppid(), SIGQUIT);
@@ -887,10 +929,14 @@ void csaparse (void)
     else if (!strcmp(stream_->lexeme, "set")) {
         result = saparam();
         GTNEXT();
-        if (stream_->type == T_NUM)
+        if (stream_->type == T_NUM && stream_->next->type)
             val = atof (stream_->lexeme);
         else {
             printf ("Expected number, but got '%s'.\n", stream_->lexeme);
+            return;
+        }
+        if (GTNEXT()->type != T_EOF) {
+            printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
             return;
         }
         switch (result) {
@@ -930,6 +976,10 @@ void csaparse (void)
     }
     else if (!strcmp(stream_->lexeme, "get")) {
         result = saparam();
+        if (GTNEXT()->type != T_EOF) {
+            printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
+            return;
+        }
         switch (result) {
             case COM_T:
                 printf ("Temperature currently set to: %f\n", pool_->T);
@@ -958,6 +1008,12 @@ void csaparse (void)
     else if (!strcmp (stream_->lexeme, "show")) {
         GTNEXT();
         result = sashow();
+        if (result == COM_ERR)
+            return;
+        if (stream_->type != T_EOF) {
+            printf ("Expected nothing, but got '%s'.\n", stream_->lexeme);
+            return;
+        }
         switch (result) {
             case 0:
                 printsolution (SIMA_curr, NULL);
@@ -994,9 +1050,14 @@ int saparam (void)
 
 int sashow (void)
 {
+    int val;
+    
     if (!strcmp(stream_->lexeme, "best")) {
         GTNEXT();
-        return 1 + p_feasible();
+        val = p_feasible();
+        if (val != COM_ERR)
+            return 1 + val;
+        return COM_ERR;
     }
     else if (stream_->type != T_EOF) {
         printf ("Expected 'best' or nothing, but got '%s'.\n", stream_->lexeme);
