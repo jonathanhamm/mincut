@@ -17,14 +17,18 @@
 #include <stdint.h>
 #include <time.h>
 
-/* Macros soley used for inserting testing code for the algorithms */
+/*  
+    Macros soley used for inserting testing code for the algorithms,
+    and termination criteria.
+ */
+#define MAX_GENGUESS(val) (1000000 / (100000 / val))
 #define TESTMODE
 //#undef TESTMODE
 #ifdef TESTMODE
     #define OPTIMAL 128
     #define MGEN
     #undef MGEN
-    #define MAX_GENERATIONS 1000
+    #define MAX_GENERATIONS MAX_GENGUESS(pool_->bitlen)
     #define EXITOPTGE()  {\
                         printf ("\nFound Optimal\n"); \
                         printgestatus (); \

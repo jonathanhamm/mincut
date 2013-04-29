@@ -266,7 +266,7 @@ int iscut(uint64_t *chrom, vertex_s *v)
 {
     uint16_t i;
     
-    i = vgetindex (v);
+    i = vgetindex(v);
     if ((~chrom[i / 64] & (1llu << (i % 64))))
         return 1;
     return 0;
@@ -561,8 +561,8 @@ void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
  Uniform Crossover: Performs a uniform crossover where 'mask' is the 
  randomly generated bit string used to select from parents. Instead of
  looping through each allele, this can be performed 64 bits/alleles at 
- a time (with a 64-bit processor). The truth table below shows how a 
- short expression/function was derived for this.  
+ a time (with a 64-bit processor). The problem can be modelled as a 
+ 2:1 multiplexer, where mask is the selector bit.
  
  p1 p2  mask  | Child
  ----------------
@@ -697,7 +697,7 @@ int run_ge (wgraph_s *g)
             index = 0;
             while ((cbuf[index] = (char)getchar()) != '\n') {
                 if (index < CBUF_SIZE-1)
-                    ++index;
+                    index++;
                 else
                     printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
             }
@@ -826,7 +826,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
             index = 0;
             while ((cbuf[index] = (char)getchar()) != '\n') {
                 if (index < CBUF_SIZE-1)
-                    ++index;
+                    index++;
                 else
                     printf ("Command Length %d Exceeded\n", CBUF_SIZE-1);
             }
@@ -909,7 +909,8 @@ int e_pow_sa (void)
 
 /*
  This replaces the the right side of the 'OR' statement in simulated annealing 
- with 'false', effectively removing it. This is for foolish hill climbing. 
+ with 'false', by always returning 0, effectively removing it. This is for 
+ foolish hill climbing.
  
  @return    Always returns 0, or 'false'. 
  */
@@ -950,7 +951,7 @@ void cSIGUSR1 (int signal)
 
 /*
  Signal handler for SIGINT (for parent process). This function is 
- called when the user presses cntrl+c, and this sends the 'status'
+ called when the user presses ctrl+c, and this sends the 'status'
  command to the child process by generating SIGUSR1 and piping 
  "status" to its command buffer. 
  
@@ -1120,11 +1121,11 @@ void printsolution (int index, uint64_t *ptr)
     printf("\n");
     for (i = 0, v1size = 0, v2size = 0, v1 = NULL, v2 = NULL; i < pool_->bitlen; i++) {
         if (chrom[i / 64] & (1llu << (i % 64))) {
-            ++v1size;
+            v1size++;
             insert_solset (&v1, pool_->graph->vtable[i]);
         }
         else {
-            ++v2size;
+            v2size++;
             insert_solset (&v2, pool_->graph->vtable[i]);
         }
     }

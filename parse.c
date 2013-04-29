@@ -6,7 +6,7 @@
  
  This file only contains code for parsing. None of the actual 
  genetic algorithm, simulated annealing, or foolish hill climbing
- code is here. Howerver, this file does have code for building and 
+ code is here. However, this file does have code for building and 
  defining the data structures used by those algorithms. 
  */
 
@@ -37,7 +37,7 @@ gtoken_s    *stream_;   //token stream
 pool_s      *pool_;     //pool of chromosomes (declared extern in bis.h, and linked in bis.c)
 
 /* reads file into a buffer */
-static unsigned char *read_gfile(const char *fname);
+static unsigned char *read_gfile (const char *fname);
 
 /* Token "constructor" */
 static gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type);
@@ -65,8 +65,7 @@ static int saparam (void);
 static int sashow (void);
 
 /*
- Main function to invoke for parsing a graph file
- into the graph structure used by the program. 
+ Function invoked for parsing a graph file.
  
  @param file    Name of file containing graph data. 
  @return        Returns a graph data structure.
@@ -205,13 +204,13 @@ uint16_t vgetindex (vertex_s *v)
  
  Lexer tokenizes based on the following regex: 
     token:  id | num
-    id:     (a...Z)+ (a...z | 0...9)*
+    id:     (a...Z)+ (a...Z | 0...9)*
     num:    magnit | - magnit
     magnit: (0...9)+ (dot (0...9)*)? | (dot (0...9)+)
  
  @param     buf     Pointer to the buffer that is tokenized.
  @return            Returns a pointer to a linked list of 
-                    tokens on success, and NULL on if there 
+                    tokens on success, and NULL if there 
                     is a lexical error.
  */
 gtoken_s *lex (unsigned char *buf)
@@ -368,19 +367,19 @@ gtoken_s *gtoken_s_ (gtoken_s *node, unsigned char *lexeme, unsigned short type)
     <nodelist> <edgelist> EOF
  
  <nodelist>=> 
-    V = {v <nodeparam>}
+    V = {id <nodeparam>}
  
  <nodeparam>=> 
-    , v <nodeparam> | epsilon
+    , id <nodeparam> | epsilon
  
  <edgelist>=> 
     E = {<e> <edgeparam> }
  
  <edgeparam>=> 
-    ,<e> <edgeparam> | epsilon
+    , <e> <edgeparam> | epsilon
  
  <e>=> 
-    {n,n,real}
+    {id, id, num}
  
  @return    Returns a pointer to the graph
             data structure built by the parser.
