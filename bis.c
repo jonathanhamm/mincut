@@ -122,6 +122,9 @@ void pool_s_ (wgraph_s *g)
     for (i = 0; i < POOLSIZE; i++) {
         do {
             for (j = 0; j < pool_->nqwords; j++, ptr++) {
+                /* rand() returns a 32 bit integer, but it
+                 ignores the signed bit. This only uses the 
+                 low 16 bits of it */
                 ((uint16_t *)ptr)[0] = (uint16_t)rand();
                 ((uint16_t *)ptr)[1] = (uint16_t)rand();
                 ((uint16_t *)ptr)[2] = (uint16_t)rand();
@@ -562,7 +565,9 @@ void npoint_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *dst2)
  randomly generated bit string used to select from parents. Instead of
  looping through each allele, this can be performed 64 bits/alleles at 
  a time (with a 64-bit processor). The problem can be modelled as a 
- 2:1 multiplexer, where mask is the selector bit.
+ 2:1 multiplexer, where mask is the selector bit and the parents are the
+ two inputs. The output is one of the children. For the 2nd child, the 
+ problem is just repeated with an inverted mask. 
  
  p1 p2  mask  | Child
  ----------------
@@ -995,7 +1000,7 @@ void printgestatus (void)
         else
             printf("No Feasibles Found\n");
     }
-    printf("Elapsed Time: %llus\n", (uint64_t)(time(NULL) - pool_->start));
+    printf("Elapsed Time: %llu seconds\n", (uint64_t)(time(NULL) - pool_->start));
     
 }
 
@@ -1016,7 +1021,7 @@ void printsastatus (void)
         else
             printf ("No 'Good' Feasibles Found.\n");
     }
-    printf("Elapsed Time: %llus\n", (uint64_t)(time(NULL) - pool_->start));
+    printf("Elapsed Time: %llu seconds\n", (uint64_t)(time(NULL) - pool_->start));
 }
 
 
@@ -1114,12 +1119,18 @@ void printsolution (int index, uint64_t *ptr)
     else
         chrom = pool_->rbuf[index].ptr;
     fitness = getfitness(chrom);
+    if (index < 0) {
+        for (index = 0; index < POOLSIZE; index++) {
+            if (pool_->rbuf[index].ptr == ptr)
+                break;
+        }
+    }
     if (isfeasible(chrom))
-        printf ("Showing Feasible Chromosome %d with fitness %f:\n", index, fitness);
+        printf ("Showing Chromosome #%d (feasible) with fitness %f:\n", index, fitness);
     else
-        printf ("Showing Infeasible Chromosome %d with fitness %f:\n", index, fitness);
+        printf ("Showing Chromosome #%d (infeasible) with fitness %f:\n", index, fitness);
     printchrom(chrom);
-    printf("\n");
+    printf("\n\nSolution Sets:\n");
     for (i = 0, v1size = 0, v2size = 0, v1 = NULL, v2 = NULL; i < pool_->bitlen; i++) {
         if (chrom[i / 64] & (1llu << (i % 64))) {
             v1size++;
@@ -1130,7 +1141,7 @@ void printsolution (int index, uint64_t *ptr)
             insert_solset (&v2, pool_->graph->vtable[i]);
         }
     }
-    printf ("\nV1 = ");
+    printf ("V1 = ");
     print_solset (v1);
     printf ("Length = %d\n\n", v1size);
     printf ("V2 = ");

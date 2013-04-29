@@ -21,7 +21,7 @@
     Macros soley used for inserting testing code for the algorithms,
     and termination criteria.
  */
-#define MAX_GENGUESS(val) (1000000 / (100000 / val))
+#define MAX_GENGUESS(val) (10 * VAL)
 #define TESTMODE
 //#undef TESTMODE
 #ifdef TESTMODE
@@ -61,13 +61,13 @@
 #endif
 
 /* Genetic algorithm constatns and macros */
-#define CR_N 2
+#define CR_N 5
 #define MDIV_CONST 5
 #define NM_BITS 2
 #define TOURN_K 85
 #define CBUF_SIZE 32
-#define INITMUTATIONPROB 3
-#define POOLSIZE 50
+#define INITMUTATIONPROB 5
+#define POOLSIZE 40
 #define CRBACKUP1 POOLSIZE
 #define CRBACKUP2 (POOLSIZE+1)
 #define PSIZE_ROUL_DIV 5
