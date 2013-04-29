@@ -961,6 +961,7 @@ void pSIGINT (int signal)
 {
     unsigned char cbuf[CBUF_SIZE];
     
+    printf("\n");
     strcpy(cbuf, "status");
     cbuf[6] = UEOF;
     write(pipe_[1], cbuf, CBUF_SIZE);
@@ -994,7 +995,7 @@ void printgestatus (void)
         else
             printf("No Feasibles Found\n");
     }
-    printf("Elapsed Time: %llu\n", (uint64_t)(time(NULL) - pool_->start));
+    printf("Elapsed Time: %llus\n", (uint64_t)(time(NULL) - pool_->start));
     
 }
 
@@ -1015,7 +1016,7 @@ void printsastatus (void)
         else
             printf ("No 'Good' Feasibles Found.\n");
     }
-    printf("Elapsed Time: %llu\n", (uint64_t)(time(NULL) - pool_->start));
+    printf("Elapsed Time: %llus\n", (uint64_t)(time(NULL) - pool_->start));
 }
 
 
