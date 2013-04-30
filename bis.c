@@ -5,7 +5,7 @@
  Description: 
  
  This file contains the main genetic algorithm code, simulated 
- annealing code, and foolish hill climbing code. This includes 
+ annealing code, and foolish hill climbing code. This includes
  selection functions, crossover functions, mutation operators, 
  fitness functions, perturbation functions, and the main loops 
  for the genetic algorithm, simulated annealing, and foolish
@@ -67,7 +67,7 @@ static int isfeasible (uint64_t *chrom);
 static int bsearch_r (roulette_s *roul, uint32_t key);
 
 /* Simulated Annealing and Foolish Hill Climbing Functions */
-static void sima_rand (roulette_s *dst);
+static void sima_rand (uint64_t *dst);
 static int e_pow_sa (void);
 static int nop_hc (void);
 
@@ -84,13 +84,14 @@ static void print_solset (solset_s *solset);
 
 /*
  "Constructor" for pool_s structure. This simply initializes a pool
- of chromosomes for the genetic algorithm.
+ of chromosomes for the genetic algorithm. Pool is initialized with 
+ a set of random feasibles. 
  
  @param g   Pointer to graph data structure used to initialize pool.
  */
 void pool_s_ (wgraph_s *g)
 {
-    uint16_t    i, j;
+    uint16_t    i, j, tries;
     uint64_t    *ptr;
     double      sum;
     
@@ -118,9 +119,11 @@ void pool_s_ (wgraph_s *g)
     pool_->k = TOURN_K;
     pool_->gen = 0;
     ptr = pool_->popul;
-    /* Initialize chromosomes randomly, but they must be feasible. */
+    /* Initialize chromosomes randomly, and attempt to make some feasible. */
     for (i = 0; i < POOLSIZE; i++) {
         do {
+            tries = 0;
+            ptr = &pool_->popul[i * pool_->nqwords];
             for (j = 0; j < pool_->nqwords; j++, ptr++) {
                 /* rand() returns a 32 bit integer, but it
                  ignores the signed bit. This only uses the 
@@ -131,8 +134,9 @@ void pool_s_ (wgraph_s *g)
                 ((uint16_t *)ptr)[3] = (uint16_t)rand();
             }
             *(ptr-1) &= pool_->cmask;
+            tries++;
         }
-        while (!isfeasible(ptr));
+        while (!isfeasible(ptr) && tries < pool_->bitlen * 10);
     }
     pool_->graph = g;
     pool_->mutateprob = INITMUTATIONPROB;
@@ -184,7 +188,7 @@ void pool_s_simanneal (wgraph_s *g, int sa_hc)
         for (i = 0; i < pool_->remain; i++)
             pool_->cmask |= (1llu << i);
     }
-    pool_->perturb = mutate1;
+    pool_->perturb = perturbinvert;
     pool_->graph = g;
     pool_->T = SIMA_t0;
     pool_->iterations = SIMA_i0;
@@ -341,7 +345,7 @@ double getfitness (uint64_t *chrom)
     
     setcount = countdigits (chrom);
     differ = abs(2*setcount - pool_->bitlen);
-    return sumweights(chrom) + (differ*16);
+    return sumweights(chrom) + (differ*25);
 }
 
 /*
@@ -655,17 +659,46 @@ void mutate2 (uint64_t *victim)
  */
 void pairwise_ex (uint64_t *victim)
 {
-    uint16_t backup, index1, index2;
+    uint16_t backup, index1, index2, tries;
     
+    if (!isfeasible(victim))
+        perturbinvert (victim);
+    tries = 0;
     index1 = rand() % pool_->bitlen;
-    while ((index2 = rand() % pool_->bitlen) == index1);
-    backup = getbit(victim, index1);
-    setbit(victim, index1, getbit(victim, index2));
-    setbit(victim, index2, backup);
+    do {
+        index2 = rand() % pool_->bitlen;
+        tries++;
+    }
+    while (getbit(victim, index1) == getbit(victim, index2) && tries < pool_->bitlen);
+    
+    /* If this condition is true, solution has gone way off track, anything else must be better */
+    if (tries == pool_->bitlen)
+        sima_rand (victim);
+    
+    victim[index1 / 64] ^= (1llu << (index1 % 64));
+    victim[index1 / 64] ^= (1llu << (index1 % 64));
 }
 
 /*
- Main function for running genetic algorithm. The genetic algorithm 
+ Inverts a bit, then randomly decides to invert 
+ a second bit. 
+ 
+ @param victim  Target chromosome to be mutated/perturbed.
+ */
+void perturbinvert (uint64_t *victim)
+{
+    uint16_t index;
+    
+    index = rand() % pool_->bitlen;
+    victim[index / 64] ^= (1llu << (index % 64));
+    if (rand() % 2) {
+        index = rand() % pool_->bitlen;
+        victim[index / 64] ^= (1llu << (index % 64));
+    }
+}
+
+/*
+ Main function for running genetic algorithm. The genetic algorithm
  is forked off and runs in a different thread. The parent process
  simply sends terminal commands to the genetic algorithm via signals.
  
@@ -725,7 +758,13 @@ int run_ge (wgraph_s *g)
          *
          */
         while (1) {
+            /* Perform Selection */
             pool_->select (&parents);
+            /*
+             This loop searches parents to see if the best fit got selected.
+             If it is, reassign its destination position in the pool so
+             the most fit is preserved
+             */
             for (i = 0; i < NSELECT; i++) {
                 rp1 = parents.couples[i].p1;
                 rp2 = parents.couples[i].p2;
@@ -752,18 +791,24 @@ int run_ge (wgraph_s *g)
                     rp2 = rpt;
                     dst2 = rpt->ptr;
                 }
+                /* Subtract from the fitness sum the current parents' fitnesses */
                 pool_->fitsum -= (rp1->fitness + rp2->fitness);
+                /* Perform Crossover */
                 pool_->cross (p1, p2, dst1, dst2);
+                /* Perform Mutation */
                 if (rand() % 100 < pool_->mutateprob) {
                     pool_->mutate (dst1);
                     pool_->mutate (dst2);
                 }
+                /* Calculate new children's fitnesses */
                 rp1->fitness = getfitness (dst1);
                 rp2->fitness = getfitness (dst2);
+                /* Add them to the total fitness sum */
                 pool_->fitsum += (rp1->fitness + rp2->fitness);
                 
             }
-            computeprob ();
+            /* compute probabilities for selection */
+            computeprob();
             pool_->gen++;
 #ifdef TESTMODE
             if (pool_->rbuf[POOLSIZE-1].fitness == OPTIMAL)
@@ -806,7 +851,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
     new_s = &pool_->rbuf[SIMA_tmp];
     s->ptr = pool_->solution;
     new_s->ptr = &pool_->solution[pool_->solusize];
-    sima_rand(s);
+    sima_rand(s->ptr);
     for (j = 0; j < pool_->solusize; j++)
         pool_->bestfeasible[j] = s->ptr[j];
     if (signal(SIGINT, pSIGINT) == SIG_ERR)
@@ -868,7 +913,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
                 }
                 pool_->nperturbations++;
 #ifdef TESTMODE
-                if (pool_->rbuf[POOLSIZE-1].fitness == OPTIMAL)
+                if (s->fitness == OPTIMAL)
                     EXITOPTSA();
 #ifdef MGEN
                 if (pool_->gen >= MAX_GENERATIONS)
@@ -876,6 +921,7 @@ int run_simanneal (wgraph_s *g, int sa_hc)
 #endif
 #endif
             }
+         //   printf("%f, %f\n", pool_->T, pool_->alpha);
             pool_->T = pool_->alpha * pool_->T;
             pool_->iterations = pool_->beta * pool_->iterations;
         }
@@ -888,20 +934,27 @@ exception_:
 }
 
 /*
- Randomly generates a feasible solution for simulated annealing 
+ Randomly generates a solution for simulated annealing 
  or foolish hill climbing and computes its fitness. 
  
  @param dst     A pointer to the structure that will contain 
                 the randomly generated solution and its fitness. 
  */
-void sima_rand (roulette_s *dst)
+void sima_rand (uint64_t *ptr)
 {
-    while (!isfeasible(dst->ptr))
-        setbit(dst->ptr, rand() % pool_->bitlen, 1);
+    uint16_t i, tries;
+    
+    for (i = 0; i < pool_->solusize; i++, ptr++) {
+        ((uint16_t *)ptr)[0] = (uint16_t)rand();
+        ((uint16_t *)ptr)[1] = (uint16_t)rand();
+        ((uint16_t *)ptr)[2] = (uint16_t)rand();
+        ((uint16_t *)ptr)[3] = (uint16_t)rand();
+    }
+    *(ptr-1) &= pool_->cmask;
 }
 
 /*
- The right side of the 'OR' statement in the simulated annealing algorithm: 
+ The right side of the 'OR' statement in the simulated annealing algorithm:
     if( h(NewS) < h(S) or random < e ^ [ (h(S) - h(NewS)) / T ] )
  This function is dynamically bound to pool_->e_pow. 
  

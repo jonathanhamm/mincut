@@ -52,7 +52,7 @@ typedef struct vrec_s vrec_s;
 /* Graph Data Structure */
 struct wgraph_s
 {
-    uint16_t  nedges;
+    uint32_t  nedges;
     uint16_t  nvert;
     vertex_s  **vtable;
 };
@@ -70,7 +70,7 @@ struct gtoken_s
 struct vertex_s
 {
     unsigned char name[MAXLEXLEN + 1];
-    uint16_t nedges;
+    uint32_t nedges;
     edge_s **edges;
 };
 

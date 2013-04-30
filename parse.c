@@ -402,7 +402,7 @@ void pgraph_ (wgraph_s *g)
     pnodelist_(g);
     pedgelist_(g);
     if (GTNEXT()->type != T_EOF) {
-        printf ("Syntax Error: %s", stream_->lexeme);
+        printf ("Syntax Error: expected nothing, but got: %s", stream_->lexeme);
         exit(EXIT_FAILURE);
     }
     printf ("Parse Success.\n");
@@ -423,7 +423,7 @@ void pnodelist_ (wgraph_s *g)
     }
     if (stream_->type == T_CLOSEBRACE)
         return;
-    printf ("Syntax Error: %s", stream_->lexeme);
+    printf ("Syntax Error while parsing nodes: %s", stream_->lexeme);
     exit(EXIT_FAILURE);
 }
 
@@ -449,7 +449,7 @@ void pedgelist_ (wgraph_s *g)
     pedgeparam_(g);
     if (stream_->type == T_CLOSEBRACE)
         return;
-    printf ("Syntax Error: %s\n", stream_->lexeme);
+    printf ("Syntax Error while parsing in edge list (edge #%d): %s\n", g->nedges, stream_->lexeme);
     exit(EXIT_FAILURE);
 }
 
@@ -468,13 +468,17 @@ void e_ (wgraph_s *g)
     if (GTNEXT()->type == T_OPENBRACE)
     if (GTNEXT()->type == T_ID) {
         v1 = v_lookup (g, stream_->lexeme);
-        if (!v1)
-            throw_exception();
+        if (!v1) {
+            printf ("Edge: %s does not exist in node set.\n", stream_->lexeme);
+            exit(EXIT_FAILURE);
+        }
         if (GTNEXT()->type == T_COMMA)
         if (GTNEXT()->type == T_ID) {
             v2 = v_lookup (g, stream_->lexeme);
-            if (!v2)
-                throw_exception();
+            if (!v2) {
+                printf ("Edge: %s does not exist in node set.\n", stream_->lexeme);
+                exit(EXIT_FAILURE);
+            }
             if (GTNEXT()->type == T_COMMA)
             if (GTNEXT()->type == T_NUM) {
                 weight = atof(stream_->lexeme);
@@ -488,7 +492,7 @@ void e_ (wgraph_s *g)
     }
     
 exception_:
-    printf ("Syntax Error: %s\n", stream_->lexeme);
+    printf ("Syntax Error while parsing an edge (edge #%d): %s\n", g->nedges, stream_->lexeme);
     exit(EXIT_FAILURE);
 }
 

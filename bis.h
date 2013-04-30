@@ -21,11 +21,11 @@
     Macros soley used for inserting testing code for the algorithms,
     and termination criteria.
  */
-#define MAX_GENGUESS(val) (10 * VAL)
+#define MAX_GENGUESS(val) (20000 * pool_->bitlen)
 #define TESTMODE
 //#undef TESTMODE
 #ifdef TESTMODE
-    #define OPTIMAL 128
+    #define OPTIMAL 67
     #define MGEN
     #undef MGEN
     #define MAX_GENERATIONS MAX_GENGUESS(pool_->bitlen)
@@ -67,7 +67,7 @@
 #define TOURN_K 85
 #define CBUF_SIZE 32
 #define INITMUTATIONPROB 5
-#define POOLSIZE 40
+#define POOLSIZE 35
 #define CRBACKUP1 POOLSIZE
 #define CRBACKUP2 (POOLSIZE+1)
 #define PSIZE_ROUL_DIV 5
@@ -84,10 +84,10 @@
 #define CQWORDSIZE(csize) (((csize) / 64) + ((csize) % 64 != 0))
 
 /* Simulated Annealing Constants */
-#define SIMA_i0     10
-#define SIMA_t0     5000
-#define SIMA_alpha  0.945    /* 0 < alpha < 1 */
-#define SIMA_beta   1.05    /* beta > 1, but preferable: 1.01 <= beta <= 1.05 */
+#define SIMA_i0     500
+#define SIMA_t0     4000
+#define SIMA_alpha  0.95     /* 0 < alpha < 1 */
+#define SIMA_beta   1.03     /* beta > 1, but preferable: 1.01 <= beta <= 1.05 */
 #define SIMA_curr   0
 #define SIMA_tmp    1
 /* Generates a random float between 0 and 1 */
@@ -189,6 +189,8 @@ extern void uniform_cr (uint64_t *p1, uint64_t *p2, uint64_t *dst1, uint64_t *ds
 extern void mutate1 (uint64_t *victim);
 extern void mutate2 (uint64_t *victim);
 extern void pairwise_ex (uint64_t *victim);
+extern void perturbinvert (uint64_t *victim);
+
 
 /* Printing Functions */
 extern void printsolution (int index, uint64_t *ptr);
